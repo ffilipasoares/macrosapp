@@ -6,12 +6,17 @@ capture parsed by Gemini and stored in Firestore.
 ## Status: Phase 1 — project scaffold
 
 - Xcode project `KitchenMacros.xcodeproj` created (SwiftUI App, min deployment target iOS 17,
-  Swift 6.0 language mode).
+  Swift 5 language mode). Targets Xcode 15.4 project format (`objectVersion = 60`) to match the
+  installed toolchain — Xcode 15.4 ships Swift 5.10, which doesn't support Swift 6 language mode
+  or Xcode 16's file-system-synchronized project groups, so this uses the classic explicit
+  file-reference project structure instead.
 - Firebase iOS SDK (`firebase-ios-sdk`, ~> 12.16.0) added as a Swift Package dependency, with
   `FirebaseAuth` and `FirebaseFirestore` linked to the app target. Not yet initialized in code —
   that's Phase 3, once `GoogleService-Info.plist` is in place.
 - Folder structure: `KitchenMacros/Models`, `Views`, `Services` (currently placeholders — see the
-  README in each).
+  README in each). New files added to these folders need a manual "Add Files to..." step in Xcode
+  (or a pbxproj edit) since this project format doesn't auto-sync folder contents like Xcode 16+
+  does.
 - `NSMicrophoneUsageDescription` / `NSSpeechRecognitionUsageDescription` are already set as
   `INFOPLIST_KEY_*` build settings (Phase 6 needs these; harmless to have them from the start).
 
@@ -20,7 +25,8 @@ capture parsed by Gemini and stored in Firestore.
 **Phase 0 prerequisites** (must be done by hand, not verifiable by Claude Code from this
 container — it has no macOS/Xcode/network access to Firebase or Google AI Studio):
 
-1. Xcode 27 installed, Apple ID signed in (free personal team is enough for on-device testing).
+1. Xcode installed (currently targeting 15.4), Apple ID signed in (free personal team is enough
+   for on-device testing).
 2. A Firebase project created at console.firebase.google.com with Firestore and Anonymous Auth
    enabled, on the free Spark plan.
 3. `GoogleService-Info.plist` downloaded from that project.

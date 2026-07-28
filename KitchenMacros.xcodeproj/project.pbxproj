@@ -3,21 +3,28 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		79F86C44BD65338DE0780EAD /* KitchenMacrosApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA71FB379CCF51A10DDCC6CF /* KitchenMacrosApp.swift */; };
+		41E63FC104D1ED0CB849E115 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C855E5962039FB0CAC3471C /* ContentView.swift */; };
+		298A792BBFCC626DA0A0E06C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A43E455857B4090701DF6BF1 /* Assets.xcassets */; };
+		A810245C71BE977845EBCB11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1D510F5A70603517CBE021F9 /* Preview Assets.xcassets */; };
 		FECA5171F08C7CB12A7B5A47 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5A37276B7CE9E2DE1092BE3A /* FirebaseAuth */; };
 		4F104CCE5E03563789D1CBA5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 0034C213908A89CAE99275DF /* FirebaseFirestore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		EB005F909CBD521D4247D428 /* KitchenMacros.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KitchenMacros.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CA71FB379CCF51A10DDCC6CF /* KitchenMacrosApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KitchenMacrosApp.swift; sourceTree = "<group>"; };
+		4C855E5962039FB0CAC3471C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A43E455857B4090701DF6BF1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1D510F5A70603517CBE021F9 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		E30C5393C7C979506DB58705 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		FCC41887780815A7BF6A5E26 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		D3C94AD9742F29F7E55F75AD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		95B64C599A88A40E13B100AF /* KitchenMacros */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = KitchenMacros; sourceTree = "<group>"; };
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		68E171601E70211305CDA766 /* Frameworks */ = {
@@ -35,7 +42,7 @@
 		8863F550A72BBB48E128EA60 = {
 			isa = PBXGroup;
 			children = (
-				95B64C599A88A40E13B100AF /* KitchenMacros */,
+				71114E4EA1439FDB82BE59BB /* KitchenMacros */,
 				BF9BA1FA8473E801322E1197 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +53,52 @@
 				EB005F909CBD521D4247D428 /* KitchenMacros.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		71114E4EA1439FDB82BE59BB /* KitchenMacros */ = {
+			isa = PBXGroup;
+			children = (
+				CA71FB379CCF51A10DDCC6CF /* KitchenMacrosApp.swift */,
+				4C855E5962039FB0CAC3471C /* ContentView.swift */,
+				A43E455857B4090701DF6BF1 /* Assets.xcassets */,
+				8FA51E1EB28B1316F6304432 /* Models */,
+				D24E863036CDEB5893671F5C /* Views */,
+				36BA333F339ACD44FE148CB9 /* Services */,
+				B36D09BAF1C80A3453A24778 /* Preview Content */,
+			);
+			path = KitchenMacros;
+			sourceTree = "<group>";
+		};
+		B36D09BAF1C80A3453A24778 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+				1D510F5A70603517CBE021F9 /* Preview Assets.xcassets */,
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		8FA51E1EB28B1316F6304432 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				E30C5393C7C979506DB58705 /* README.md */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D24E863036CDEB5893671F5C /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				FCC41887780815A7BF6A5E26 /* README.md */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		36BA333F339ACD44FE148CB9 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				D3C94AD9742F29F7E55F75AD /* README.md */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -63,9 +116,6 @@
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				95B64C599A88A40E13B100AF /* KitchenMacros */,
-			);
 			name = KitchenMacros;
 			packageProductDependencies = (
 				5A37276B7CE9E2DE1092BE3A /* FirebaseAuth */,
@@ -82,11 +132,11 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1700;
-				LastUpgradeCheck = 2700;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
 				TargetAttributes = {
 					551F75151E1C44EE327D1F3A = {
-						CreatedOnToolsVersion = 27.0;
+						CreatedOnToolsVersion = 15.4;
 					};
 				};
 			};
@@ -99,11 +149,9 @@
 				Base,
 			);
 			mainGroup = 8863F550A72BBB48E128EA60;
-			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				FE75A8C11DD90C0667340898 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 			);
-			preferredProjectObjectVersion = 77;
 			productRefGroup = BF9BA1FA8473E801322E1197 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -118,6 +166,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				298A792BBFCC626DA0A0E06C /* Assets.xcassets in Resources */,
+				A810245C71BE977845EBCB11 /* Preview Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +178,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				79F86C44BD65338DE0780EAD /* KitchenMacrosApp.swift in Sources */,
+				41E63FC104D1ED0CB849E115 /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -279,7 +331,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.filipasoares.kitchenmacros;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -310,7 +362,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.filipasoares.kitchenmacros;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
