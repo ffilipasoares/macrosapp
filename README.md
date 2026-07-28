@@ -10,9 +10,14 @@ capture parsed by Gemini and stored in Firestore.
   installed toolchain — Xcode 15.4 ships Swift 5.10, which doesn't support Swift 6 language mode
   or Xcode 16's file-system-synchronized project groups, so this uses the classic explicit
   file-reference project structure instead.
-- Firebase iOS SDK (`firebase-ios-sdk`, ~> 12.16.0) added as a Swift Package dependency, with
-  `FirebaseAuth` and `FirebaseFirestore` linked to the app target. Not yet initialized in code —
-  that's Phase 3, once `GoogleService-Info.plist` is in place.
+- Firebase iOS SDK (`firebase-ios-sdk`, pinned to `~> 11.15.0`) added as a Swift Package
+  dependency, with `FirebaseAuth` and `FirebaseFirestore` linked to the app target. Not yet
+  initialized in code — that's Phase 3, once `GoogleService-Info.plist` is in place.
+  **Pinned below 12.0.0 deliberately**: Firebase 12.x bumped its Package.swift to
+  `swift-tools-version:6.0`, which needs the Swift 6.0 toolchain (Xcode 16+) just to resolve the
+  manifest — Xcode 15.4 fails with "incompatible tools version" if you point it at 12.x. 11.15.0
+  is the last release still on `swift-tools-version:5.9`. Re-pin to a 12.x+ version once you
+  upgrade to Xcode 16 or later.
 - Folder structure: `KitchenMacros/Models`, `Views`, `Services` (currently placeholders — see the
   README in each). New files added to these folders need a manual "Add Files to..." step in Xcode
   (or a pbxproj edit) since this project format doesn't auto-sync folder contents like Xcode 16+
