@@ -1,0 +1,18 @@
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+.build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Firebase — contains real project keys, never commit
+GoogleService-Info.plist
+
+# macOS
+.DS_Store
