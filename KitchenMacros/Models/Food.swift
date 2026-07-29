@@ -1,7 +1,7 @@
 import FirebaseFirestore
 
 /// Macros per 100g, stored in the `foods` collection.
-struct Food: Identifiable, Codable {
+struct Food: Identifiable, FirestoreDocument {
     @DocumentID var id: String?
     var name: String
     var kcal: Double

@@ -13,11 +13,18 @@
 		A810245C71BE977845EBCB11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1D510F5A70603517CBE021F9 /* Preview Assets.xcassets */; };
 		FECA5171F08C7CB12A7B5A47 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5A37276B7CE9E2DE1092BE3A /* FirebaseAuth */; };
 		4F104CCE5E03563789D1CBA5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 0034C213908A89CAE99275DF /* FirebaseFirestore */; };
+		6DD5A5991CECDD6B84188519 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = D5DFB44E0B39411EF996A078 /* FirebaseCore */; };
 		513BBA1EB9231E1FABA5B8CE /* Food.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7670BA65C651E59415B1334 /* Food.swift */; };
 		378D20EDDF61B234D860E6A8 /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6AA9E75409791C0AD53F18B /* Recipe.swift */; };
 		D096B18A1D42CA53FFEA8761 /* Ingredient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDAABAD98EE7191688A6411 /* Ingredient.swift */; };
 		996430E8E4DB181998CE2204 /* LogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7EC6AB78486F3FB3C46048B /* LogEntry.swift */; };
 		136D4F295179050D35D0F5B7 /* Goals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAE057C5E9D7A479F873058 /* Goals.swift */; };
+		E5D13CD99A6F864BE2B1CDAB /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE02E24EF0D9C3199BF6E64 /* AuthService.swift */; };
+		EF4E5756C8705AC4C5FACA67 /* FirestoreCollectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525D018C6F4213E56D56553E /* FirestoreCollectionService.swift */; };
+		D99C786AE964BB06352DC32E /* FoodsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A614F617DFDF91AEFF7F64CB /* FoodsService.swift */; };
+		C9D084BEFE2A63C078F74C00 /* RecipesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B4A2BBF6CE0E02542ECE71 /* RecipesService.swift */; };
+		AA33A207135AB94DFCA07289 /* LogEntriesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E972065B273415AEB22BBE /* LogEntriesService.swift */; };
+		8A4785A7D8B0EB3E66734DC5 /* GoalsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 238E0331F110EB887D4FA0A5 /* GoalsService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,7 +39,12 @@
 		F7EC6AB78486F3FB3C46048B /* LogEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogEntry.swift; sourceTree = "<group>"; };
 		6BAE057C5E9D7A479F873058 /* Goals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Goals.swift; sourceTree = "<group>"; };
 		FCC41887780815A7BF6A5E26 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		D3C94AD9742F29F7E55F75AD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		9BE02E24EF0D9C3199BF6E64 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
+		525D018C6F4213E56D56553E /* FirestoreCollectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreCollectionService.swift; sourceTree = "<group>"; };
+		A614F617DFDF91AEFF7F64CB /* FoodsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoodsService.swift; sourceTree = "<group>"; };
+		33B4A2BBF6CE0E02542ECE71 /* RecipesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecipesService.swift; sourceTree = "<group>"; };
+		49E972065B273415AEB22BBE /* LogEntriesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogEntriesService.swift; sourceTree = "<group>"; };
+		238E0331F110EB887D4FA0A5 /* GoalsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoalsService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,6 +54,7 @@
 			files = (
 				FECA5171F08C7CB12A7B5A47 /* FirebaseAuth in Frameworks */,
 				4F104CCE5E03563789D1CBA5 /* FirebaseFirestore in Frameworks */,
+				6DD5A5991CECDD6B84188519 /* FirebaseCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,7 +122,12 @@
 		36BA333F339ACD44FE148CB9 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				D3C94AD9742F29F7E55F75AD /* README.md */,
+				9BE02E24EF0D9C3199BF6E64 /* AuthService.swift */,
+				525D018C6F4213E56D56553E /* FirestoreCollectionService.swift */,
+				A614F617DFDF91AEFF7F64CB /* FoodsService.swift */,
+				33B4A2BBF6CE0E02542ECE71 /* RecipesService.swift */,
+				49E972065B273415AEB22BBE /* LogEntriesService.swift */,
+				238E0331F110EB887D4FA0A5 /* GoalsService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -133,6 +151,7 @@
 			packageProductDependencies = (
 				5A37276B7CE9E2DE1092BE3A /* FirebaseAuth */,
 				0034C213908A89CAE99275DF /* FirebaseFirestore */,
+				D5DFB44E0B39411EF996A078 /* FirebaseCore */,
 			);
 			productName = KitchenMacros;
 			productReference = EB005F909CBD521D4247D428 /* KitchenMacros.app */;
@@ -198,6 +217,12 @@
 				D096B18A1D42CA53FFEA8761 /* Ingredient.swift in Sources */,
 				996430E8E4DB181998CE2204 /* LogEntry.swift in Sources */,
 				136D4F295179050D35D0F5B7 /* Goals.swift in Sources */,
+				E5D13CD99A6F864BE2B1CDAB /* AuthService.swift in Sources */,
+				EF4E5756C8705AC4C5FACA67 /* FirestoreCollectionService.swift in Sources */,
+				D99C786AE964BB06352DC32E /* FoodsService.swift in Sources */,
+				C9D084BEFE2A63C078F74C00 /* RecipesService.swift in Sources */,
+				AA33A207135AB94DFCA07289 /* LogEntriesService.swift in Sources */,
+				8A4785A7D8B0EB3E66734DC5 /* GoalsService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -429,6 +454,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FE75A8C11DD90C0667340898 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		D5DFB44E0B39411EF996A078 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FE75A8C11DD90C0667340898 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

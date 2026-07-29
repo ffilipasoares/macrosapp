@@ -7,7 +7,7 @@ enum LogSourceType: String, Codable {
 }
 
 /// Stored in the `logEntries` collection.
-struct LogEntry: Identifiable, Codable {
+struct LogEntry: Identifiable, FirestoreDocument {
     @DocumentID var id: String?
     var date: Date
     var sourceType: LogSourceType
