@@ -13,6 +13,11 @@
 		A810245C71BE977845EBCB11 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1D510F5A70603517CBE021F9 /* Preview Assets.xcassets */; };
 		FECA5171F08C7CB12A7B5A47 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 5A37276B7CE9E2DE1092BE3A /* FirebaseAuth */; };
 		4F104CCE5E03563789D1CBA5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 0034C213908A89CAE99275DF /* FirebaseFirestore */; };
+		513BBA1EB9231E1FABA5B8CE /* Food.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7670BA65C651E59415B1334 /* Food.swift */; };
+		378D20EDDF61B234D860E6A8 /* Recipe.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6AA9E75409791C0AD53F18B /* Recipe.swift */; };
+		D096B18A1D42CA53FFEA8761 /* Ingredient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFDAABAD98EE7191688A6411 /* Ingredient.swift */; };
+		996430E8E4DB181998CE2204 /* LogEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7EC6AB78486F3FB3C46048B /* LogEntry.swift */; };
+		136D4F295179050D35D0F5B7 /* Goals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BAE057C5E9D7A479F873058 /* Goals.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,7 +26,11 @@
 		4C855E5962039FB0CAC3471C /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A43E455857B4090701DF6BF1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1D510F5A70603517CBE021F9 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
-		E30C5393C7C979506DB58705 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		D7670BA65C651E59415B1334 /* Food.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Food.swift; sourceTree = "<group>"; };
+		C6AA9E75409791C0AD53F18B /* Recipe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recipe.swift; sourceTree = "<group>"; };
+		CFDAABAD98EE7191688A6411 /* Ingredient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Ingredient.swift; sourceTree = "<group>"; };
+		F7EC6AB78486F3FB3C46048B /* LogEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogEntry.swift; sourceTree = "<group>"; };
+		6BAE057C5E9D7A479F873058 /* Goals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Goals.swift; sourceTree = "<group>"; };
 		FCC41887780815A7BF6A5E26 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		D3C94AD9742F29F7E55F75AD /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -80,7 +89,11 @@
 		8FA51E1EB28B1316F6304432 /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				E30C5393C7C979506DB58705 /* README.md */,
+				D7670BA65C651E59415B1334 /* Food.swift */,
+				C6AA9E75409791C0AD53F18B /* Recipe.swift */,
+				CFDAABAD98EE7191688A6411 /* Ingredient.swift */,
+				F7EC6AB78486F3FB3C46048B /* LogEntry.swift */,
+				6BAE057C5E9D7A479F873058 /* Goals.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -180,6 +193,11 @@
 			files = (
 				79F86C44BD65338DE0780EAD /* KitchenMacrosApp.swift in Sources */,
 				41E63FC104D1ED0CB849E115 /* ContentView.swift in Sources */,
+				513BBA1EB9231E1FABA5B8CE /* Food.swift in Sources */,
+				378D20EDDF61B234D860E6A8 /* Recipe.swift in Sources */,
+				D096B18A1D42CA53FFEA8761 /* Ingredient.swift in Sources */,
+				996430E8E4DB181998CE2204 /* LogEntry.swift in Sources */,
+				136D4F295179050D35D0F5B7 /* Goals.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

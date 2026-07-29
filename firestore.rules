@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Single-user app (Firebase Anonymous Auth, one device). There's no ownership field on
+// documents to check per-request, so the rule that matters is simply: reject anyone who
+// isn't signed in. Only this app's anonymous session can ever authenticate against this
+// project, so "authenticated" and "the one user" are the same thing here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /foods/{foodId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /recipes/{recipeId} {
+      allow read, write: if request.auth != null;
+
+      match /ingredients/{ingredientId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    match /logEntries/{logEntryId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /goals/{goalId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
