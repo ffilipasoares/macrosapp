@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isMember(householdId) {
+      return request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/households/$(householdId)).data.members;
+    }
+
+    // The web app talks to Firestore directly for one thing only: the grocery
+    // list, so that it syncs live between phones and works offline.
+    match /households/{householdId}/groceries/{itemId} {
+      allow read, delete: if isMember(householdId);
+      allow create, update: if isMember(householdId)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.checked is bool
+        && request.resource.data.source in ['plan', 'manual', 'siri'];
+    }
+
+    // Everything else (recipes, plans, settings, households, users) is read and
+    // written only by the backend, which checks the signed-in user itself.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
