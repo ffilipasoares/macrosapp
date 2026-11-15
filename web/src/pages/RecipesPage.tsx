@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { ErrorNote, Loading, ProteinDot, Sheet, Thumb, listButton, messageOf, primaryButton, quietButton } from "../components/ui";
-import type { Recipe, RecipeDraft } from "../types";
+import { CATEGORIES, PROTEIN_GROUPS, type Category, type Recipe, type RecipeDraft } from "../types";
 
 type AddMode = "menu" | "images" | "link" | "video" | "voice" | "text";
 
@@ -16,20 +16,39 @@ export function RecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<string>("all");
+  const [type, setType] = useState<Category | "all">("all");
   const [adding, setAdding] = useState<AddMode | null>(null);
 
   useEffect(() => {
     api.listRecipes().then(setRecipes).catch((e) => setError(messageOf(e)));
   }, []);
 
-  const proteins = useMemo(() => [...new Set((recipes ?? []).map((recipe) => recipe.protein ?? "other"))].sort(), [recipes]);
   const q = query.trim().toLowerCase();
-  const shown = (recipes ?? []).filter(
-    (recipe) =>
-      (filter === "all" || recipe.protein === filter) &&
-      (!q || recipe.title.toLowerCase().includes(q) || (recipe.ingredients ?? []).some((ingredient) => ingredient.name.includes(q))),
+  const typesPresent = useMemo(
+    () => CATEGORIES.filter((category) => (recipes ?? []).some((recipe) => (recipe.category ?? "main") === category.key)),
+    [recipes],
   );
+  const sections = useMemo(() => {
+    const shown = (recipes ?? []).filter(
+      (recipe) =>
+        (type === "all" || (recipe.category ?? "main") === type) &&
+        (!q || recipe.title.toLowerCase().includes(q) || (recipe.ingredients ?? []).some((ingredient) => ingredient.name.includes(q))),
+    );
+    const byTitle = (a: Recipe, b: Recipe) => a.title.localeCompare(b.title);
+    // Main dishes are grouped by protein; every other kind of dish gets its own section.
+    const mains = shown.filter((recipe) => (recipe.category ?? "main") === "main");
+    const grouped = PROTEIN_GROUPS.map((group) => ({
+      title: group.label,
+      recipes: mains.filter((recipe) => group.proteins.includes(recipe.protein ?? "other")).sort(byTitle),
+    }));
+    const known = new Set(PROTEIN_GROUPS.flatMap((group) => group.proteins));
+    grouped.push({ title: "Other main dishes", recipes: mains.filter((recipe) => !known.has(recipe.protein ?? "other")).sort(byTitle) });
+    const others = CATEGORIES.filter((category) => category.key !== "main").map((category) => ({
+      title: category.plural,
+      recipes: shown.filter((recipe) => recipe.category === category.key).sort(byTitle),
+    }));
+    return [...grouped, ...others].filter((section) => section.recipes.length > 0);
+  }, [recipes, type, q]);
 
   const review = useCallback((draft: RecipeDraft) => navigate("/recipes/new", { state: { draft } }), [navigate]);
   const close = useCallback(() => setAdding(null), []);
@@ -77,47 +96,43 @@ export function RecipesPage() {
                     className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-soft/80"
                   />
                 </label>
-                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by protein">
-                  {["all", ...proteins].map((value) => {
-                    const on = value === filter;
+                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by type">
+                  {[{ key: "all" as const, plural: "All" }, ...typesPresent].map((choice) => {
+                    const on = choice.key === type;
                     return (
                       <button
-                        key={value}
-                        onClick={() => setFilter(value)}
+                        key={choice.key}
+                        onClick={() => setType(choice.key)}
                         aria-pressed={on}
-                        className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-out ${
+                        className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-out ${
                           on ? "bg-ink text-paper" : "bg-card text-ink ring-1 ring-line hover:ring-ink-soft"
                         }`}
                       >
-                        {value === "all" ? "All" : <ProteinDot protein={value} />}
+                        {choice.plural}
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {shown.length === 0 ? (
+              {sections.length === 0 ? (
                 <p className="py-12 text-center text-ink-soft">{q ? `No recipes match “${query}”.` : "No recipes match."}</p>
               ) : (
-                <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">
-                  {shown.map((recipe) => (
-                    <li key={recipe.id}>
-                      <Link to={`/recipes/${recipe.id}`} className="group flex w-full flex-col text-left">
-                        <span className="relative block transition-transform duration-200 ease-out group-hover:scale-[1.02]">
-                          <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} size="tile" />
-                          {recipe.needs_review ? (
-                            <span className="absolute left-2 top-2 rounded-full bg-mustard px-2 py-0.5 text-[11px] font-semibold text-ink">Check this</span>
-                          ) : null}
-                        </span>
-                        <span className="mt-2 line-clamp-2 font-semibold leading-snug">{recipe.title}</span>
-                        <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-soft">
-                          <ProteinDot protein={recipe.protein} />
-                          {recipe.prep_minutes ? <span>· {recipe.prep_minutes} min</span> : <span>· serves {recipe.servings}</span>}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                sections.map((section) => (
+                  <section key={section.title} className="flex flex-col gap-3">
+                    <h2 className="flex items-baseline gap-2 text-lg font-bold">
+                      {section.title}
+                      <span className="text-sm font-medium text-ink-soft">{section.recipes.length}</span>
+                    </h2>
+                    <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">
+                      {section.recipes.map((recipe) => (
+                        <li key={recipe.id}>
+                          <RecipeTile recipe={recipe} />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))
               )}
             </>
           )}
@@ -126,6 +141,24 @@ export function RecipesPage() {
 
       {adding && <AddSheet mode={adding} setMode={setAdding} onDraft={review} onClose={close} />}
     </>
+  );
+}
+
+function RecipeTile({ recipe }: { recipe: Recipe }) {
+  return (
+    <Link to={`/recipes/${recipe.id}`} className="group flex w-full flex-col text-left">
+      <span className="relative block transition-transform duration-200 ease-out group-hover:scale-[1.02]">
+        <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} size="tile" />
+        {recipe.needs_review ? (
+          <span className="absolute left-2 top-2 rounded-full bg-mustard px-2 py-0.5 text-[11px] font-semibold text-ink">Check this</span>
+        ) : null}
+      </span>
+      <span className="mt-2 line-clamp-2 font-semibold leading-snug">{recipe.title}</span>
+      <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-soft">
+        <ProteinDot protein={recipe.protein} />
+        {recipe.prep_minutes ? <span>· {recipe.prep_minutes} min</span> : <span>· serves {recipe.servings}</span>}
+      </span>
+    </Link>
   );
 }
 

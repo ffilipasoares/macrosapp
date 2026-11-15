@@ -633,6 +633,12 @@ export interface components {
              * @default other
              */
             protein: string;
+            /**
+             * Category
+             * @default main
+             * @enum {string}
+             */
+            category?: "main" | "breakfast" | "dessert" | "snack" | "side" | "drink";
             /** Tags */
             tags?: string[];
             /** Prep Minutes */
@@ -687,6 +693,12 @@ export interface components {
              * @default other
              */
             protein: string;
+            /**
+             * Category
+             * @default main
+             * @enum {string}
+             */
+            category?: "main" | "breakfast" | "dessert" | "snack" | "side" | "drink";
             /** Tags */
             tags?: string[];
             /** Prep Minutes */

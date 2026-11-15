@@ -8,7 +8,7 @@ import { deleteRecipePhoto, uploadRecipePhoto } from "../lib/photos";
 import { lastCookedLabel, proteinStyle } from "../lib/style";
 import { useMe } from "../session";
 import { formatQuantity } from "../lib/weeks";
-import { AISLES, PROTEINS, UNITS, type Ingredient, type Recipe, type RecipeDraft, type ReferencePortion } from "../types";
+import { AISLES, CATEGORIES, PROTEINS, UNITS, type Category, type Ingredient, type Recipe, type RecipeDraft, type ReferencePortion } from "../types";
 
 /** Read view: what you look at while cooking. */
 export function RecipePage() {
@@ -71,6 +71,11 @@ export function RecipePage() {
               <span className={`h-2 w-2 rounded-full ${p.bg}`} aria-hidden="true" />
               {p.label}
             </span>
+            {recipe.category && recipe.category !== "main" ? (
+              <span className="rounded-full bg-ink px-2.5 py-1 font-semibold text-paper">
+                {CATEGORIES.find((category) => category.key === recipe.category)?.label}
+              </span>
+            ) : null}
             <span className="text-ink-soft">
               Serves {recipe.servings}
               {recipe.prep_minutes ? ` · ${recipe.prep_minutes} min` : ""} · {lastCookedLabel(recipe.last_planned_week)}
@@ -285,6 +290,25 @@ export function RecipeEditPage() {
         <div>
           <label htmlFor="recipe-title" className="field-label">Name</label>
           <input id="recipe-title" className="field" value={draft.title} onChange={(e) => update({ title: e.target.value })} required maxLength={200} />
+        </div>
+
+        <div>
+          <label htmlFor="recipe-category" className="field-label">Type</label>
+          <select
+            id="recipe-category"
+            className="field"
+            value={draft.category ?? "main"}
+            onChange={(e) => update({ category: e.target.value as Category })}
+          >
+            {CATEGORIES.map((category) => (
+              <option key={category.key} value={category.key}>
+                {category.label}
+              </option>
+            ))}
+          </select>
+          {(draft.category ?? "main") !== "main" ? (
+            <p className="mt-1 text-xs text-ink-soft">Only main dishes are used in the weekly plan; this one stays in your library.</p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-3 gap-3">

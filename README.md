@@ -39,7 +39,10 @@ Google Cloud.
   an approved plan turns it back into a draft until you approve again.
 - **Generate a new plan** starts over.
 
-**Recipes**. Your library, searchable by name or ingredient and filterable by protein.
+**Recipes**. Your library, searchable by name or ingredient. Main dishes are grouped by
+protein (chicken & poultry, fish & seafood, meat, vegetarian & vegan); desserts,
+breakfasts, snacks, sides and drinks each have their own section, and chips filter by type.
+Only main dishes are used in the weekly plan.
 - **Add recipe** offers six ways: a link (TikTok, recipe website, blog), one or
   several screenshots, saying it out loud, a saved video, pasted text, or typing it.
 - Every recipe can have a photo, added or changed in its edit form.

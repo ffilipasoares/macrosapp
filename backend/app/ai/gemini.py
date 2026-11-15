@@ -18,7 +18,7 @@ from google.genai import types
 from pydantic import BaseModel, ValidationError
 
 from app.ai.base import AIError
-from app.models import Aisle, Ingredient, IngredientNutrition, RecipeDraft
+from app.models import Aisle, Category, Ingredient, IngredientNutrition, RecipeDraft
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,9 @@ Rules for the structured recipe:
 - aisle is where a supermarket would stock the ingredient.
 - protein is the main protein of the dish. Use "vegetarian" or "vegan" when there is no meat
   or fish.
+- category is the kind of dish: "main" for a lunch or dinner main course (including
+  soups, salads and bowls eaten as a meal), or "breakfast", "dessert", "snack", "side"
+  or "drink".
 - servings is how many people the recipe feeds; use 2 if the source does not say.
 - prep_minutes is the total time, or null if unknown. source_url is null if unknown.
 - tags are a few short lower-case labels such as "quick", "pasta", "soup", "healthy".
@@ -72,6 +75,7 @@ class _AiRecipe(BaseModel):
     ingredients: list[_AiIngredient]
     steps: list[str]
     protein: Protein
+    category: Category
     tags: list[str]
     prep_minutes: int | None
     original_language: str
@@ -122,6 +126,7 @@ def _to_draft(recipe: _AiRecipe) -> RecipeDraft:
             ingredients=ingredients,
             steps=[step.strip() for step in recipe.steps if step.strip()],
             protein=recipe.protein,
+            category=recipe.category,
             tags=recipe.tags[:8],
             prep_minutes=recipe.prep_minutes
             if recipe.prep_minutes and recipe.prep_minutes > 0

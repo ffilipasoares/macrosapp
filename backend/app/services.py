@@ -133,7 +133,7 @@ def _fill_with_suggestions(
     for draft in drafts:
         # Found by a search for these diets, so they count as fitting them.
         recipe = Recipe(**draft.model_dump(), diet_fit={d: True for d in settings.diets})
-        if fits(settings.diets, recipe):
+        if recipe.category == "main" and fits(settings.diets, recipe):
             found.append(recipe)
 
     def take(recipe: Recipe) -> None:
@@ -194,7 +194,8 @@ def _fill_with_suggestions(
             extra_found = [
                 recipe
                 for draft in extra_drafts
-                if fits(
+                if draft.category == "main"
+                and fits(
                     settings.diets,
                     recipe := Recipe(
                         **draft.model_dump(), diet_fit={d: True for d in settings.diets}
@@ -295,7 +296,8 @@ def generate_plan(
     kept_ids = {recipe.id for recipe in kept_recipes}
     notes: list[str] = []
 
-    library = repo.list_recipes(household_id)
+    # Only main dishes are planned; desserts, breakfasts and the rest stay in the library.
+    library = [r for r in repo.list_recipes(household_id) if r.category == "main"]
     problem = check_diets(repo, ai, household_id, library, settings.diets)
     if problem:
         notes.append(problem)
@@ -432,7 +434,11 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     return planner.alternatives(
         planned,
         slot,
-        [r for r in repo.list_recipes(household_id) if fits(settings.diets, r)],
+        [
+            r
+            for r in repo.list_recipes(household_id)
+            if r.category == "main" and fits(settings.diets, r)
+        ],
         slot_count,
         settings.rules,
         recent_recipe_ids(repo, household_id, week_id, settings),

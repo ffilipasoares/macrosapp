@@ -36,3 +36,23 @@ export const UNITS = ["", "g", "kg", "ml", "l", "tsp", "tbsp", "cup", "clove", "
 
 export type Macros = Schemas["Macros"];
 export type ReferencePortion = Schemas["ReferencePortion"];
+
+export type Category = NonNullable<Recipe["category"]>;
+
+/** Kinds of dish. Only main dishes go into the weekly plan. */
+export const CATEGORIES: { key: Category; label: string; plural: string }[] = [
+  { key: "main", label: "Main dish", plural: "Main dishes" },
+  { key: "breakfast", label: "Breakfast", plural: "Breakfasts" },
+  { key: "dessert", label: "Dessert", plural: "Desserts" },
+  { key: "snack", label: "Snack", plural: "Snacks" },
+  { key: "side", label: "Side", plural: "Sides" },
+  { key: "drink", label: "Drink", plural: "Drinks" },
+];
+
+/** How main dishes are grouped on the Recipes page, by their main protein. */
+export const PROTEIN_GROUPS: { label: string; proteins: string[] }[] = [
+  { label: "Chicken & poultry", proteins: ["chicken", "turkey"] },
+  { label: "Fish & seafood", proteins: ["fish", "seafood"] },
+  { label: "Meat", proteins: ["beef", "pork", "lamb"] },
+  { label: "Vegetarian & vegan", proteins: ["vegetarian", "vegan", "egg"] },
+];

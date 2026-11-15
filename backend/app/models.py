@@ -94,6 +94,9 @@ class Ingredient(BaseModel):
         return self
 
 
+Category = Literal["main", "breakfast", "dessert", "snack", "side", "drink"]
+
+
 class RecipeDraft(BaseModel):
     """A recipe before it is saved: what the user types or the AI extracts."""
 
@@ -102,6 +105,8 @@ class RecipeDraft(BaseModel):
     ingredients: list[Ingredient] = Field(default_factory=list)
     steps: list[str] = Field(default_factory=list)
     protein: str = "other"
+    # What kind of dish it is. Only main dishes are planned as lunches and dinners.
+    category: Category = "main"
     tags: list[str] = Field(default_factory=list)
     prep_minutes: int | None = Field(default=None, ge=0, le=1440)
     source_url: str | None = None
