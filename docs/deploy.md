@@ -97,8 +97,8 @@ backend directly at its Cloud Run address:
 gcloud run services update mealplan-api --region europe-west1 --update-env-vars "^;^CORS_ORIGINS=https://PROJECT.web.app,https://PROJECT.firebaseapp.com;WEB_SEARCH_SECONDS=100"
 ```
 
-`WEB_SEARCH_SECONDS` is how long the web search may run (default 100). Without
-`VITE_API_URL`, keep it at 50 or less.
+`WEB_SEARCH_SECONDS` is how long the web search may run. The default is 50, which
+fits through Hosting; raise it only once `VITE_API_URL` is set and deployed.
 
 ## 4. Schedule the Friday plan
 

@@ -26,10 +26,11 @@ class Config:
     # Firebase Storage bucket (e.g. "PROJECT.firebasestorage.app") for copies of web photos.
     # Empty means web photos are shown from their original address instead.
     storage_bucket: str = field(default_factory=lambda: os.getenv("STORAGE_BUCKET", ""))
-    # How long plan generation may search the web. The app calls Cloud Run directly
-    # (see web/.env: VITE_API_URL), so this is not bound by Firebase Hosting's 60 seconds.
+    # How long plan generation may search the web. Through Firebase Hosting a request
+    # must finish within 60 seconds, so the default is 50. When the app calls Cloud Run
+    # directly (web/.env: VITE_API_URL), set it higher, e.g. 100.
     web_search_seconds: float = field(
-        default_factory=lambda: float(os.getenv("WEB_SEARCH_SECONDS", "100"))
+        default_factory=lambda: float(os.getenv("WEB_SEARCH_SECONDS", "50"))
     )
     # Web addresses allowed to call the API directly, comma-separated. Defaults to APP_URL.
     cors_origins: list[str] = field(

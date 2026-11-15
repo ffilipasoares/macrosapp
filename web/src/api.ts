@@ -13,7 +13,7 @@ export class ApiError extends Error {
 const DEFAULT_TIMEOUT_MS = 45_000;
 /** Reading a video, a recording or several screenshots takes longer. */
 const AI_TIMEOUT_MS = 120_000;
-/** Planning can search the web for up to the server's budget (100 s by default). */
+/** Planning can search the web for up to the server's budget (WEB_SEARCH_SECONDS). */
 const PLAN_TIMEOUT_MS = 180_000;
 
 /**
