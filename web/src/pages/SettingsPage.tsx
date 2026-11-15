@@ -1,8 +1,10 @@
 import { signOut } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { Bell, Copy, LogOut, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api";
-import { ErrorNote, Loading, Stepper, messageOf } from "../components/ui";
+import { ErrorNote, Loading, Stepper, messageOf, quietButton } from "../components/ui";
 import { auth } from "../firebase";
+import { DAY_COLORS, proteinStyle } from "../lib/style";
 import { DAYS, MEALS } from "../lib/weeks";
 import { enablePush, pushState, type PushState } from "../push";
 import { useMe } from "../session";
@@ -24,7 +26,15 @@ export function SettingsPage() {
     void pushState().then(setPush);
   }, []);
 
-  if (!settings) return <div className="page"><h1>Settings</h1><ErrorNote message={error} /><Loading /></div>;
+  if (!settings) {
+    return (
+      <main className="min-h-0 flex-1 overflow-y-auto px-5 pt-8">
+        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+        <ErrorNote message={error} />
+        {!error && <Loading />}
+      </main>
+    );
+  }
 
   const slots = settings.slots ?? {};
   const rules = settings.rules ?? [];
@@ -59,150 +69,241 @@ export function SettingsPage() {
     }
   }
 
+  function addRule() {
+    const tag = newRule.tag.trim().toLowerCase();
+    if (!tag) return;
+    change({ rules: [...rules.filter((r) => !(r.kind === newRule.kind && r.tag === tag)), { ...newRule, tag }] });
+  }
+
   const apiBase = `${window.location.origin}/api/shortcuts`;
+  const keys = [
+    { id: "grocery", label: "Add to groceries", value: `${apiBase}/grocery` },
+    { id: "image", label: "Save a recipe screenshot", value: `${apiBase}/recipe-image` },
+    { id: "key", label: "Your key (keep it private)", value: me.shortcut_token },
+  ];
 
   return (
-    <div className="page">
-      <header className="page-head">
-        <h1>Settings</h1>
-        {dirty && (
-          <button className="primary small" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save changes"}
-          </button>
-        )}
-      </header>
-      <ErrorNote message={error} />
+    <>
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-2xl flex-col gap-8 px-5 pb-6 pt-8">
+          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <ErrorNote message={error} />
 
-      <section className="panel">
-        <h2>Meals you cook</h2>
-        <p className="muted">
-          Switch on the meals you cook and set how many portions to make. A dinner that also covers tomorrow's lunch is
-          one cooked meal with more portions; leave that lunch switched off. {cooked} meals a week.
-        </p>
-        <div className="slots">
-          {DAYS.map((day) => (
-            <div className="slot-day" key={day.key}>
-              <h3>{day.name}</h3>
-              {MEALS.map((meal) => {
-                const key = `${day.key}_${meal.key}`;
-                const slot = slots[key] ?? { cook: false, portions: 2 };
-                const set = (changes: Partial<typeof slot>) => change({ slots: { ...slots, [key]: { ...slot, ...changes } } });
-                return (
-                  <div className="slot-row" key={key}>
-                    <label>
-                      <input type="checkbox" id={`slot-${key}`} checked={!!slot.cook} onChange={(e) => set({ cook: e.target.checked })} />
-                      {meal.name}
-                    </label>
-                    {slot.cook ? (
-                      <Stepper label={`${day.name} ${meal.name} portions`} value={slot.portions ?? 2} onChange={(portions) => set({ portions })} />
-                    ) : (
-                      <span className="muted">not cooked</span>
-                    )}
+          <Section title="Meals you cook" note={`Switch on the meals you cook and how many portions to make. A dinner that also covers tomorrow's lunch is one meal with more portions; leave that lunch off. ${cooked} meals a week.`}>
+            <ol className="flex flex-col">
+              {DAYS.map((day, dayIndex) => (
+                <li key={day.key} className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 border-t border-line py-2 first:border-t-0">
+                  <div className={`pt-3 text-sm font-extrabold ${DAY_COLORS[dayIndex]}`}>{day.name.slice(0, 3)}</div>
+                  <div className="flex flex-col">
+                    {MEALS.map((meal) => {
+                      const key = `${day.key}_${meal.key}`;
+                      const slot = slots[key] ?? { cook: false, portions: 2 };
+                      const set = (changes: Partial<typeof slot>) => change({ slots: { ...slots, [key]: { ...slot, ...changes } } });
+                      return (
+                        <div key={key} className="flex min-h-12 items-center justify-between gap-3">
+                          <Toggle id={`slot-${key}`} label={meal.name} checked={!!slot.cook} onChange={(cook) => set({ cook })} />
+                          {slot.cook ? (
+                            <Stepper label={`${day.name} ${meal.name} portions`} value={slot.portions ?? 2} onChange={(portions) => set({ portions })} />
+                          ) : (
+                            <span className="text-sm text-ink-soft">not cooked</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
+                </li>
+              ))}
+            </ol>
+          </Section>
+
+          <Section title="Rules for the weekly plan" note="Every generated plan follows these. Swaps that would break one are marked.">
+            {rules.length === 0 ? <p className="text-sm text-ink-soft">No rules yet.</p> : null}
+            <ul className="flex flex-col">
+              {rules.map((rule, index) => {
+                const style = proteinStyle(rule.tag);
+                return (
+                  <li key={index} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-b-0">
+                    <span className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${style.bg}`} aria-hidden="true" />
+                      {rule.kind === "max" ? "At most" : "At least"} {rule.count} {rule.tag} a week
+                    </span>
+                    <button
+                      className="grid h-8 w-8 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink"
+                      aria-label={`Remove rule: ${rule.tag}`}
+                      onClick={() => change({ rules: rules.filter((_, i) => i !== index) })}
+                    >
+                      <X size={16} />
+                    </button>
+                  </li>
                 );
               })}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="panel">
-        <h2>Rules for the weekly plan</h2>
-        <p className="muted">Every generated plan follows these. Swaps that would break one are marked.</p>
-        {rules.length === 0 && <p className="muted">No rules yet.</p>}
-        <ul className="plain">
-          {rules.map((rule, index) => (
-            <li key={index} className="row between">
-              <span>
-                {rule.kind === "max" ? "At most" : "At least"} {rule.count} {rule.tag} meals a week
-              </span>
-              <button className="icon-button" aria-label="Remove rule" onClick={() => change({ rules: rules.filter((_, i) => i !== index) })}>
-                ✕
+            </ul>
+            <div className="flex flex-wrap items-center gap-2 rounded-3xl bg-card p-3 ring-1 ring-line">
+              <select
+                id="rule-kind"
+                aria-label="At least or at most"
+                className="min-h-10 rounded-full bg-paper px-3 font-semibold"
+                value={newRule.kind ?? "min"}
+                onChange={(e) => setNewRule({ ...newRule, kind: e.target.value as Rule["kind"] })}
+              >
+                <option value="min">At least</option>
+                <option value="max">At most</option>
+              </select>
+              <Stepper label="How many" min={0} max={14} value={newRule.count} onChange={(count) => setNewRule({ ...newRule, count })} />
+              <input
+                id="rule-tag"
+                list="rule-tags"
+                aria-label="Protein or tag"
+                className="min-h-10 min-w-0 flex-1 rounded-full bg-paper px-4 outline-none"
+                value={newRule.tag}
+                onChange={(e) => setNewRule({ ...newRule, tag: e.target.value })}
+              />
+              <datalist id="rule-tags">
+                {[...PROTEINS.filter((p) => p !== "other"), "quick", "pasta", "soup"].map((tag) => (
+                  <option key={tag} value={tag} />
+                ))}
+              </datalist>
+              <button className="whitespace-nowrap rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper disabled:opacity-40" disabled={!newRule.tag.trim()} onClick={addRule}>
+                Add rule
               </button>
-            </li>
-          ))}
-        </ul>
-        <div className="rule-form">
-          <select id="rule-kind" aria-label="At least or at most" value={newRule.kind ?? "min"} onChange={(e) => setNewRule({ ...newRule, kind: e.target.value as Rule["kind"] })}>
-            <option value="min">At least</option>
-            <option value="max">At most</option>
-          </select>
-          <Stepper label="How many" min={0} max={14} value={newRule.count} onChange={(count) => setNewRule({ ...newRule, count })} />
-          <input id="rule-tag" list="rule-tags" aria-label="Protein or tag" value={newRule.tag} onChange={(e) => setNewRule({ ...newRule, tag: e.target.value })} />
-          <datalist id="rule-tags">
-            {[...PROTEINS.filter((p) => p !== "other"), "quick", "pasta", "soup"].map((tag) => <option key={tag} value={tag} />)}
-          </datalist>
-          <button className="secondary small" disabled={!newRule.tag.trim()} onClick={() => { const tag = newRule.tag.trim().toLowerCase(); change({ rules: [...rules.filter((r) => !(r.kind === newRule.kind && r.tag === tag)), { ...newRule, tag }] }); }}>
-            Add rule
-          </button>
-        </div>
-        <div className="grid-2">
-          <div>
-            <label htmlFor="repeat-weeks">Avoid repeats from the last</label>
-            <select id="repeat-weeks" value={settings.repeat_window_weeks ?? 2} onChange={(e) => change({ repeat_window_weeks: Number(e.target.value) })}>
-              {[0, 1, 2, 3, 4].map((weeks) => <option key={weeks} value={weeks}>{weeks === 0 ? "no weeks (repeats allowed)" : `${weeks} week${weeks > 1 ? "s" : ""}`}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="repeat-ratio">Repeats allowed</label>
-            <select id="repeat-ratio" value={settings.max_repeat_ratio ?? 0.2} onChange={(e) => change({ max_repeat_ratio: Number(e.target.value) })}>
-              {[0, 0.1, 0.2, 0.3, 0.5].map((ratio) => <option key={ratio} value={ratio}>{ratio * 100}% of meals</option>)}
-            </select>
-          </div>
-        </div>
-      </section>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="repeat-weeks" className="field-label">Avoid repeats from</label>
+                <select id="repeat-weeks" className="field" value={settings.repeat_window_weeks ?? 2} onChange={(e) => change({ repeat_window_weeks: Number(e.target.value) })}>
+                  {[0, 1, 2, 3, 4].map((weeks) => (
+                    <option key={weeks} value={weeks}>
+                      {weeks === 0 ? "no weeks" : `the last ${weeks} week${weeks > 1 ? "s" : ""}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="repeat-ratio" className="field-label">Repeats allowed</label>
+                <select id="repeat-ratio" className="field" value={settings.max_repeat_ratio ?? 0.2} onChange={(e) => change({ max_repeat_ratio: Number(e.target.value) })}>
+                  {[0, 0.1, 0.2, 0.3, 0.5].map((ratio) => (
+                    <option key={ratio} value={ratio}>
+                      {ratio * 100}% of meals
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </Section>
 
-      <section className="panel">
-        <h2>Always in the house</h2>
-        <p className="muted">Ingredients you never need on the generated list, such as salt or olive oil.</p>
-        <div className="chips">
-          {staples.map((name) => (
-            <button key={name} className="chip active" onClick={() => change({ staples: staples.filter((s) => s !== name) })} aria-label={`Remove ${name}`}>
-              {name} ✕
+          <Section title="Always in the house" note="Ingredients you never need on the generated list, such as salt or olive oil.">
+            {staples.length ? (
+              <div className="flex flex-wrap gap-2">
+                {staples.map((name) => (
+                  <button
+                    key={name}
+                    className="flex items-center gap-1.5 rounded-full bg-card py-1.5 pl-3 pr-2 text-sm font-medium ring-1 ring-line hover:ring-ink-soft"
+                    onClick={() => change({ staples: staples.filter((s) => s !== name) })}
+                    aria-label={`Remove ${name}`}
+                  >
+                    {name} <X size={14} className="text-ink-soft" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <form
+              className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (staple.trim()) {
+                  change({ staples: [...staples, staple.trim().toLowerCase()] });
+                  setStaple("");
+                }
+              }}
+            >
+              <input
+                id="staple-add"
+                value={staple}
+                onChange={(e) => setStaple(e.target.value)}
+                placeholder="olive oil"
+                aria-label="Add a staple"
+                className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
+              />
+              <button disabled={!staple.trim()} className="whitespace-nowrap rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper disabled:opacity-30">
+                Add
+              </button>
+            </form>
+          </Section>
+
+          <Section title="Friday notification" note="Get “Your meal plan for next week is ready” on this phone every Friday.">
+            {push === "on" && <p className="rounded-2xl bg-green-soft px-4 py-3 text-sm font-medium">Notifications are on for this phone.</p>}
+            {push === "off" && (
+              <button className={quietButton} onClick={() => enablePush().then(setPush).catch((e) => setError(messageOf(e)))}>
+                <Bell size={18} /> Turn on notifications
+              </button>
+            )}
+            {push === "needs-install" && (
+              <p className="rounded-2xl bg-card px-4 py-3 text-sm ring-1 ring-line">On iPhone, first add this app to your home screen (Share, then Add to Home Screen) and open it from there.</p>
+            )}
+            {push === "denied" && <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">Notifications are blocked for this app in your phone's settings.</p>}
+            {push === "unavailable" && <p className="rounded-2xl bg-card px-4 py-3 text-sm ring-1 ring-line">Notifications are not set up on this device.</p>}
+          </Section>
+
+          <Section title="Siri and the share sheet" note="Two Apple Shortcuts send to these addresses with your key. Step-by-step instructions are in docs/shortcuts.md in the project.">
+            <dl className="flex flex-col gap-3">
+              {keys.map(({ id, label, value }) => (
+                <div key={id} className="rounded-2xl bg-card p-3 ring-1 ring-line">
+                  <dt className="flex items-center justify-between gap-3 text-sm font-semibold">
+                    {label}
+                    <button className="flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-blue hover:bg-blue-soft" onClick={() => copy(id, value)}>
+                      <Copy size={14} /> {copied === id ? "Copied" : "Copy"}
+                    </button>
+                  </dt>
+                  <dd className="mt-1 break-all font-mono text-xs text-ink-soft">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </Section>
+
+          <Section title="Account" note={`Signed in as ${auth.currentUser?.email ?? ""}`}>
+            <button className={quietButton} onClick={() => signOut(auth)}>
+              <LogOut size={18} /> Sign out
             </button>
-          ))}
+          </Section>
         </div>
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (staple.trim()) { change({ staples: [...staples, staple.trim().toLowerCase()] }); setStaple(""); } }}>
-          <input id="staple-add" value={staple} onChange={(e) => setStaple(e.target.value)} placeholder="olive oil" aria-label="Add a staple" />
-          <button className="secondary small" disabled={!staple.trim()}>Add</button>
-        </form>
-      </section>
+      </main>
 
-      <section className="panel">
-        <h2>Friday notification</h2>
-        <p className="muted">Get “Your meal plan for next week is ready” on this phone every Friday.</p>
-        {push === "on" && <p className="note note-ok">Notifications are on for this phone.</p>}
-        {push === "off" && (
-          <button className="secondary" onClick={() => enablePush().then(setPush).catch((e) => setError(messageOf(e)))}>
-            Turn on notifications
+      {dirty ? (
+        <div className="mx-auto w-full max-w-2xl shrink-0 px-5 pb-3 pt-2">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-orange py-4 text-base font-bold text-card disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save changes"}
           </button>
-        )}
-        {push === "needs-install" && <p className="note">On iPhone, first add this app to your home screen (Share, then Add to Home Screen) and open it from there.</p>}
-        {push === "denied" && <p className="note note-warn">Notifications are blocked for this app in your phone's settings.</p>}
-        {push === "unavailable" && <p className="note">Notifications are not set up on this device.</p>}
-      </section>
+        </div>
+      ) : null}
+    </>
+  );
+}
 
-      <section className="panel">
-        <h2>Siri and the share sheet</h2>
-        <p className="muted">
-          Create two Apple Shortcuts that send to the addresses below, using your key. Step-by-step instructions are in
-          docs/shortcuts.md in the project.
-        </p>
-        <dl className="keys">
-          <dt>Add to groceries</dt>
-          <dd><code>{apiBase}/grocery</code> <button className="link" onClick={() => copy("grocery", `${apiBase}/grocery`)}>{copied === "grocery" ? "Copied" : "Copy"}</button></dd>
-          <dt>Save a recipe screenshot</dt>
-          <dd><code>{apiBase}/recipe-image</code> <button className="link" onClick={() => copy("image", `${apiBase}/recipe-image`)}>{copied === "image" ? "Copied" : "Copy"}</button></dd>
-          <dt>Your key (keep it private)</dt>
-          <dd><code>{me.shortcut_token}</code> <button className="link" onClick={() => copy("key", me.shortcut_token)}>{copied === "key" ? "Copied" : "Copy"}</button></dd>
-        </dl>
-      </section>
+function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h2 className="text-lg font-bold">{title}</h2>
+        {note ? <p className="mt-0.5 text-sm text-ink-soft">{note}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
 
-      <section className="panel">
-        <h2>Account</h2>
-        <p className="muted">Signed in as {auth.currentUser?.email}</p>
-        <button className="secondary" onClick={() => signOut(auth)}>Sign out</button>
-      </section>
-    </div>
+function Toggle({ id, label, checked, onChange }: { id: string; label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label htmlFor={id} className="flex cursor-pointer items-center gap-3">
+      <input id={id} type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span
+        aria-hidden="true"
+        className="relative h-7 w-12 shrink-0 rounded-full bg-line transition-colors duration-150 ease-out after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-card after:shadow after:transition-transform after:duration-150 peer-checked:bg-green peer-checked:after:translate-x-5 peer-focus-visible:outline-2 peer-focus-visible:outline-orange"
+      />
+      <span className="font-medium">{label}</span>
+    </label>
   );
 }

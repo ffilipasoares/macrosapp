@@ -66,7 +66,8 @@ Google Cloud.
 ## How it is built
 
 ```
-web/       TypeScript + React (Vite). Installed to the home screen.
+web/       TypeScript + React (Vite) + Tailwind, styled from the "Macros App"
+           design in Magic Patterns. Installed to the home screen.
 backend/   Python + FastAPI, runs on Cloud Run.
   app/core/      Planning, portion scaling, list merging. No database or AI code.
   app/repo/      Storage: Firestore, and an in-memory version for tests.
