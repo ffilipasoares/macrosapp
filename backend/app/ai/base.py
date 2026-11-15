@@ -30,6 +30,12 @@ class RecipeAI(Protocol):
         """For each ingredient, in order: the weight of one unit and macros per 100 g."""
         ...
 
+    def check_diets(
+        self, recipes: list[tuple[str, list[str]]], diets: list[str]
+    ) -> list[dict[str, bool]]:
+        """For each (title, ingredient names), whether it fits each diet, in order."""
+        ...
+
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
         """Addresses of recipe pages found by a web search. They are checked before use."""
         ...

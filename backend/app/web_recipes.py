@@ -23,6 +23,8 @@ MAX_PAGES = 16
 MAX_WORKERS = 6
 # The start of a page is enough to find its recipe, and shorter is much faster to read.
 MAX_PAGE_CHARS = 8000
+# Downloads stop this long before the deadline, so the pages that did load can still be read.
+READ_RESERVE_SECONDS = 15.0
 
 
 def _fetch_page(
@@ -75,18 +77,17 @@ def find_web_recipes(
     if not urls:
         return []
 
+    fetch_deadline = None if deadline is None else deadline - READ_RESERVE_SECONDS
     pool = ThreadPoolExecutor(max_workers=min(8, len(urls)))
-    futures = [pool.submit(_fetch_page, read_link, url, deadline) for url in urls]
-    remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+    futures = [pool.submit(_fetch_page, read_link, url, fetch_deadline) for url in urls]
+    remaining = None if fetch_deadline is None else max(0.0, fetch_deadline - time.monotonic())
     done, not_done = wait(futures, timeout=remaining)
     if not_done:
         log.info("%d of %d pages for %r were not ready in time", len(not_done), len(urls), query)
     pool.shutdown(wait=False, cancel_futures=True)
 
     contents = [
-        content
-        for future in futures
-        if future in done and (content := future.result()) is not None
+        content for future in futures if future in done and (content := future.result()) is not None
     ]
     if not contents or (deadline is not None and time.monotonic() >= deadline):
         return []

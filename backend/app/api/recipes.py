@@ -171,6 +171,12 @@ def update_recipe(
     recipe = existing.model_copy(update={**draft.model_dump(), "needs_review": False})
     recipe = Recipe.model_validate(recipe.model_dump())
     services.fill_nutrition(ai, recipe, previous=existing)
+    # A changed recipe may no longer fit a diet it was checked against.
+    if (recipe.title, [i.name for i in recipe.ingredients]) != (
+        existing.title,
+        [i.name for i in existing.ingredients],
+    ):
+        recipe.diet_fit = {}
     if recipe.image_url != existing.image_url:
         keep_own_copy(web.images, web.read_image, household.id, recipe)
     repo.save_recipe(household.id, recipe)

@@ -31,7 +31,7 @@ export function PlanPage() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState<"generate" | "approve" | null>(null);
+  const [busy, setBusy] = useState<"generate" | "approve" | "diets" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSlot, setOpenSlot] = useState<string | null>(null);
   const [listCount, setListCount] = useState<number | null>(null);
@@ -81,6 +81,20 @@ export function PlanPage() {
     setError(null);
     try {
       setPlan(await api.generatePlan(weekId!));
+      setListCount(null);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Apply the current diets to this plan: keep meals that fit, replace the others. */
+  async function applyDiets() {
+    setBusy("diets");
+    setError(null);
+    try {
+      setPlan(await api.applyDiets(weekId!));
       setListCount(null);
     } catch (e) {
       setError(messageOf(e));
@@ -166,6 +180,21 @@ export function PlanPage() {
                 </p>
               ))}
 
+              {settings && sameDiets(plan!.diets ?? [], settings.diets ?? []) ? null : (
+                <section className="flex flex-col gap-3 rounded-2xl bg-periwinkle-soft px-4 py-3">
+                  <p className="text-sm">
+                    <span className="font-semibold">Your diets changed since this plan was made.</span>{" "}
+                    {(settings?.diets ?? []).length
+                      ? `Now: ${(settings?.diets ?? []).join(", ")}.`
+                      : "You no longer have a diet chosen."}{" "}
+                    Meals that already fit stay; the others are replaced.
+                  </p>
+                  <button onClick={applyDiets} disabled={busy !== null} className={`self-start ${darkButton} py-2 text-sm`}>
+                    {busy === "diets" ? "Updating…" : "Update this week"}
+                  </button>
+                </section>
+              )}
+
               <RuleScore plan={plan!} rules={settings?.rules ?? []} />
 
               <ol className="flex flex-col">
@@ -239,6 +268,10 @@ export function PlanPage() {
       )}
     </>
   );
+}
+
+function sameDiets(a: string[], b: string[]): boolean {
+  return JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 }
 
 function dayNumber(weekId: string, dayIndex: number): string {

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.diet import tidy
 from app.core.ingredients import guess_aisle, normalize_name, normalize_unit
 from app.core.nutrition import recipe_totals
 from app.core.weeks import SLOT_KEYS
@@ -147,6 +148,8 @@ class Recipe(RecipeDraft):
     created_at: datetime = Field(default_factory=now)
     last_planned_week: str | None = None
     needs_review: bool = False
+    # Whether the recipe fits each diet it was checked against, e.g. {"mediterranean": true}.
+    diet_fit: dict[str, bool] = Field(default_factory=dict)
 
 
 class SlotSetting(BaseModel):
@@ -189,13 +192,25 @@ class Settings(BaseModel):
     max_repeat_ratio: float = Field(default=0.2, ge=0, le=1)
     timezone: str = "Europe/Lisbon"
     reference_portion: ReferencePortion = Field(default_factory=ReferencePortion)
-    # Free text, e.g. "mediterranean". Vegetarian, vegan and pescatarian also rule out foods.
-    diet: str = Field(default="", max_length=60)
+    # Free text, several allowed, e.g. ["mediterranean", "high-protein"].
+    # Vegetarian, vegan and pescatarian also rule out foods.
+    diets: list[str] = Field(default_factory=list, max_length=6)
 
-    @field_validator("diet")
+    @model_validator(mode="before")
     @classmethod
-    def _tidy_diet(cls, value: str) -> str:
-        return " ".join(value.split()).lower()
+    def _one_diet_becomes_a_list(cls, data: object) -> object:
+        # Settings saved before several diets were possible had a single "diet".
+        if isinstance(data, dict) and "diet" in data and not data.get("diets"):
+            data = {**data, "diets": [data["diet"]] if data["diet"] else []}
+        return data
+
+    @field_validator("diets")
+    @classmethod
+    def _tidy_diets(cls, value: list[str]) -> list[str]:
+        diets = tidy(value)
+        if any(len(diet) > 60 for diet in diets):
+            raise ValueError("a diet is at most 60 characters")
+        return diets
 
     @model_validator(mode="after")
     def _complete_slots(self) -> "Settings":
@@ -222,6 +237,8 @@ class WeekPlan(BaseModel):
     notes: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=now)
     approved_at: datetime | None = None
+    # The diets the plan was made for; None for plans made before diets existed.
+    diets: list[str] | None = None
 
 
 class RuleStatus(BaseModel):

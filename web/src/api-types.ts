@@ -608,6 +608,8 @@ export interface components {
             generated_at?: string;
             /** Approved At */
             approved_at?: string | null;
+            /** Diets */
+            diets?: string[] | null;
             /** Rule Status */
             rule_status?: components["schemas"]["RuleStatus"][];
             /** Open Slots */
@@ -659,6 +661,10 @@ export interface components {
              * @default false
              */
             needs_review: boolean;
+            /** Diet Fit */
+            diet_fit?: {
+                [key: string]: boolean;
+            };
         };
         /**
          * RecipeDraft
@@ -776,11 +782,8 @@ export interface components {
              */
             timezone: string;
             reference_portion?: components["schemas"]["ReferencePortion"];
-            /**
-             * Diet
-             * @default
-             */
-            diet?: string;
+            /** Diets */
+            diets?: string[];
         };
         /** SiriItem */
         SiriItem: {

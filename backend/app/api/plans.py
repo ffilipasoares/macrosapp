@@ -58,6 +58,18 @@ def set_meal(
     return services.plan_out(repo, household.id, plan)
 
 
+@router.post("/{week_id}/apply-diets")
+def apply_diets(
+    week_id: str, household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep, web: WebDep
+) -> PlanOut:
+    """Update an existing plan for the current diets, keeping the meals that already fit."""
+    try:
+        plan = services.apply_diets(repo, ai, household.id, _week(week_id), random.Random(), web)
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+    return services.plan_out(repo, household.id, plan)
+
+
 @router.post("/{week_id}/meals/{slot}/swap")
 def swap(week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep) -> PlanOut:
     """Swap a meal in one tap for another recipe that keeps the rules."""

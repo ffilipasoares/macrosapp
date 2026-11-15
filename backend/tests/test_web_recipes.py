@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from google.genai import types
 
-from app import links
+from app import links, web_recipes
 from app.ai.fake import FakeRecipeAI
 from app.ai.gemini import GeminiRecipeAI
 from app.config import Config
@@ -391,7 +391,7 @@ def test_one_search_covers_every_rule_and_empty_meal():
     assert all(status["ok"] for status in plan["rule_status"])
 
 
-def test_slow_pages_are_left_out_instead_of_holding_up_the_plan():
+def test_slow_pages_are_left_out_instead_of_holding_up_the_plan(monkeypatch):
     import time
 
     def reader_with_a_slow_page(url: str) -> LinkContent:
@@ -406,9 +406,11 @@ def test_slow_pages_are_left_out_instead_of_holding_up_the_plan():
             "https://good.example/fish-3",
         ]
     )
+    # Downloads get 0.5 s, then 1 s is kept for reading the pages that did load.
+    monkeypatch.setattr(web_recipes, "READ_RESERVE_SECONDS", 1.0)
     started = time.monotonic()
     found = find_web_recipes(
-        ai, reader_with_a_slow_page, "fish", 3, [], deadline=time.monotonic() + 0.5
+        ai, reader_with_a_slow_page, "fish", 3, [], deadline=time.monotonic() + 1.5
     )
-    assert time.monotonic() - started < 1.5
+    assert time.monotonic() - started < 1.9
     assert [draft.title for draft in found] == ["Fish tacos", "Grilled fish"]

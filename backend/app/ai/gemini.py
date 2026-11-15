@@ -5,6 +5,7 @@ by our own models, so a malformed answer becomes an AIError instead of bad data.
 Errors from Google are translated into messages that say what to fix.
 """
 
+import json
 import logging
 import re
 import threading
@@ -96,6 +97,15 @@ class _AiNutrition(BaseModel):
 
 class _AiNutritionList(BaseModel):
     items: list[_AiNutrition]
+
+
+class _AiDietVerdict(BaseModel):
+    index: int
+    fits: list[bool]
+
+
+class _AiDietVerdicts(BaseModel):
+    items: list[_AiDietVerdict]
 
 
 def _to_draft(recipe: _AiRecipe) -> RecipeDraft:
@@ -192,7 +202,9 @@ class GeminiRecipeAI:
                 raise self._explain(error) from error
             except Exception as error:  # stale pooled SSL socket or transient network drop
                 if attempt == 0:
-                    log.warning("Gemini %s transport error, retrying with fresh client: %s", what, error)
+                    log.warning(
+                        "Gemini %s transport error, retrying with fresh client: %s", what, error
+                    )
                     continue
                 log.exception("Gemini %s failed", what)
                 raise self._explain(error) from error
@@ -328,7 +340,9 @@ class GeminiRecipeAI:
         if count <= 0:
             return []
         diet_note = f" {diet.strip()}" if diet.strip() else ""
-        reqs = [f"- {n} recipe(s) with main protein or tag '{tag}'" for tag, n in needs.items() if n > 0]
+        reqs = [
+            f"- {n} recipe(s) with main protein or tag '{tag}'" for tag, n in needs.items() if n > 0
+        ]
         extra = count - sum(needs.values())
         if extra > 0:
             reqs.append(
@@ -341,7 +355,8 @@ class GeminiRecipeAI:
         )
         avoid = "; ".join(avoid_titles[:50]) or "none"
         prompt = (
-            f"Provide {count} distinct, realistic{diet_note} home-cooked dinner recipes indexed 0 to {count - 1} "
+            f"Provide {count} distinct, realistic{diet_note} home-cooked dinner recipes "
+            f"indexed 0 to {count - 1} "
             "(set found=true and source_url=null for each):\n"
             + "\n".join(reqs)
             + forbid
@@ -388,13 +403,35 @@ class GeminiRecipeAI:
                     )
         return estimates
 
+    def check_diets(
+        self, recipes: list[tuple[str, list[str]]], diets: list[str]
+    ) -> list[dict[str, bool]]:
+        lines = "\n".join(
+            f"{index}. {title} ({', '.join(ingredients[:25])})"
+            for index, (title, ingredients) in enumerate(recipes)
+        )
+        prompt = (
+            f"Diets, in this order: {json.dumps(diets)}.\n"
+            "For each numbered recipe below (title, then ingredients), give `fits`: one true or "
+            "false per diet, in the same order, saying whether the recipe is a reasonable, "
+            "typical meal for someone following that diet. Judge from the ingredients. "
+            "Answer for every index.\n\n" + lines
+        )
+        result = self._structured([prompt], _AiDietVerdicts, "diet check")
+        verdicts: list[dict[str, bool]] = [{} for _ in recipes]
+        for item in result.items:
+            if 0 <= item.index < len(recipes) and len(item.fits) == len(diets):
+                verdicts[item.index] = dict(zip(diets, item.fits, strict=True))
+        return verdicts
+
     def _search_once(self, query: str, count: int, avoid: str) -> list[str]:
         target = min(max(count + 2, 4), 8)
         response = self._call(
             [
                 f"Use Google Search to find {target} different recipe pages for: {query}. "
                 "Each must be a page for one single recipe from a well-known recipe website "
-                "(such as BBC Good Food, RecipeTin Eats, Simply Recipes, Allrecipes, Serious Eats), "
+                "(such as BBC Good Food, RecipeTin Eats, Simply Recipes, Allrecipes, "
+                "Serious Eats), "
                 f"not a collection. Avoid recipes similar to: {avoid}. "
                 "Reply only with a short bullet list of the recipe titles."
             ],
@@ -427,19 +464,25 @@ class GeminiRecipeAI:
         # One Google Search call typically attaches 5-7 grounding links. When more meals
         # or multiple protein rules are needed, run focused searches in parallel.
         rule_parts = re.findall(r"at least (\d+) with ([a-zA-Z0-9_-]+)", query)
+        # Keep the chosen diets in the focused searches too, e.g. "that are mediterranean".
+        diet_match = re.search(r"that are ([^,]+)", query)
+        diets = f" {diet_match.group(1).strip()}" if diet_match else ""
         if count <= 3 or not rule_parts:
             urls = self._search_once(query, count, avoid)
         else:
             subqueries: list[tuple[str, int]] = [
-                (f"healthy home-cooked {tag} dinner recipe", int(num) + 2)
+                (f"healthy{diets} home-cooked {tag} dinner recipe", int(num) + 2)
                 for num, tag in rule_parts[:3]
             ]
             rule_total = sum(int(num) for num, _ in rule_parts[:3])
             if count > rule_total and len(subqueries) < 3:
-                subqueries.append(("healthy home-cooked dinner recipe", count - rule_total + 2))
+                subqueries.append(
+                    (f"healthy{diets} home-cooked dinner recipe", count - rule_total + 2)
+                )
             if len(subqueries) == 1:
                 urls = self._search_once(subqueries[0][0], subqueries[0][1], avoid)
             else:
+
                 def run_sub(item: tuple[str, int]) -> list[str]:
                     try:
                         return self._search_once(item[0], item[1], avoid)

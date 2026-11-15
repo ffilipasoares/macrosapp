@@ -79,6 +79,16 @@ class FakeRecipeAI:
             for item in ingredients
         ]
 
+    def check_diets(
+        self, recipes: list[tuple[str, list[str]]], diets: list[str]
+    ) -> list[dict[str, bool]]:
+        self.calls.append(("diets", [title for title, _ in recipes]))
+        # Pretend fried food and burgers fit no diet; everything else fits.
+        return [
+            {diet: not any(word in title.lower() for word in ("fried", "burger")) for diet in diets}
+            for title, _ in recipes
+        ]
+
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
         self.calls.append(("search", query))
         # Pages named after the start of the query, taking turns at any protein a rule asks for.

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app.ai.base import AIError, RecipeAI
 from app.core import planner
-from app.core.diet import fits_diet, search_phrase
+from app.core.diet import fits, needs_verdict, search_phrase
 from app.core.grocery import build_grocery_lines
 from app.core.ingredients import guess_aisle, normalize_name
 from app.core.weeks import SLOT_KEYS, next_week_id, previous_week_ids
@@ -23,6 +23,7 @@ from app.models import (
     PlanMeal,
     PlanOut,
     Recipe,
+    Rule,
     Settings,
     WeekPlan,
     now,
@@ -40,6 +41,8 @@ class NotFound(Exception):
 
 # Firebase Hosting gives up on a request after 60 seconds; the rest of the plan needs little.
 WEB_SEARCH_SECONDS = 50
+# How many recipes are judged against the diets in one AI call.
+DIET_CHECK_BATCH = 40
 
 
 @dataclass
@@ -122,12 +125,15 @@ def _fill_with_suggestions(
     total = max(gaps, sum(needs.values()))
     if total == 0:
         return picks, new_ids
-    query = search_phrase(settings.diet, needs)
+    query = search_phrase(settings.diets, needs)
     # Ask for a couple more than needed, since some pages will not work.
     drafts = find_web_recipes(ai, web.read_link, query, total + 2, titles, deadline)
-    found = [
-        Recipe(**draft.model_dump()) for draft in drafts if fits_diet(settings.diet, draft.protein)
-    ]
+    found = []
+    for draft in drafts:
+        # Found by a search for these diets, so they count as fitting them.
+        recipe = Recipe(**draft.model_dump(), diet_fit={d: True for d in settings.diets})
+        if fits(settings.diets, recipe):
+            found.append(recipe)
 
     def take(recipe: Recipe) -> None:
         found.remove(recipe)
@@ -177,12 +183,22 @@ def _fill_with_suggestions(
         used_titles = [*titles, *(r.title for r in picks)]
         try:
             extra_drafts = fallback_fn(
-                remaining_needs, remaining_gaps, forbidden, used_titles, settings.diet
+                remaining_needs,
+                remaining_gaps,
+                forbidden,
+                used_titles,
+                " and ".join(settings.diets),
             )
+            # Written for these diets, so they count as fitting them.
             extra_found = [
-                Recipe(**draft.model_dump())
+                recipe
                 for draft in extra_drafts
-                if fits_diet(settings.diet, draft.protein)
+                if fits(
+                    settings.diets,
+                    recipe := Recipe(
+                        **draft.model_dump(), diet_fit={d: True for d in settings.diets}
+                    ),
+                )
             ]
         except AIError as error:
             log.warning("Fallback recipe generation failed: %s", error)
@@ -222,6 +238,42 @@ def _fill_with_suggestions(
     return picks, new_ids
 
 
+def check_diets(
+    repo: Repo, ai: RecipeAI | None, household_id: str, recipes: list[Recipe], diets: list[str]
+) -> str | None:
+    """Make sure each recipe has been judged against each diet. Returns a problem, if any.
+
+    Verdicts are stored on the recipe, so each recipe is only judged once per diet.
+    Recipes that could not be judged are treated as fitting.
+    """
+    pending = [recipe for recipe in recipes if needs_verdict(diets, recipe)]
+    if not pending or ai is None:
+        return None
+    try:
+        for start in range(0, len(pending), DIET_CHECK_BATCH):
+            batch = pending[start : start + DIET_CHECK_BATCH]
+            verdicts = ai.check_diets(
+                [(r.title, [i.name for i in r.ingredients]) for r in batch], diets
+            )
+            for recipe, verdict in zip(batch, verdicts, strict=False):
+                if verdict:
+                    recipe.diet_fit = {**recipe.diet_fit, **verdict}
+                    repo.save_recipe(household_id, recipe)
+    except AIError as error:
+        log.warning("Could not check recipes against diets: %s", error)
+        return f"Could not check your recipes against your diets: {error}"
+    return None
+
+
+def _adjusted_rules(rules: list[Rule], kept: list[Recipe]) -> list[Rule]:
+    """The rules still to meet once some meals are already decided."""
+    adjusted = []
+    for rule in rules:
+        already = sum(1 for recipe in kept if planner.matches(recipe, rule.tag))
+        adjusted.append(rule.model_copy(update={"count": max(0, rule.count - already)}))
+    return adjusted
+
+
 def generate_plan(
     repo: Repo,
     ai: RecipeAI | None,
@@ -229,23 +281,33 @@ def generate_plan(
     week_id: str,
     rng: random.Random,
     web: Web | None = None,
+    keep: dict[str, PlanMeal] | None = None,
 ) -> WeekPlan:
-    """Build a draft plan for a week and save it under the week's id."""
-    settings = repo.get_settings(household_id)
-    slots = settings.cook_slots()
-    recipes = [r for r in repo.list_recipes(household_id) if fits_diet(settings.diet, r.protein)]
-    recent = recent_recipe_ids(repo, household_id, week_id, settings)
+    """Build a draft plan for a week and save it under the week's id.
 
-    picks = planner.pick_recipes(
-        recipes, len(slots), settings.rules, recent, settings.max_repeat_ratio, rng
-    )
+    Meals in ``keep`` stay as they are; the other meals are chosen around them.
+    """
+    settings = repo.get_settings(household_id)
+    kept = dict(keep or {})
+    slots = [slot for slot in settings.cook_slots() if slot not in kept]
+    kept_recipes = [meal.recipe for meal in kept.values()]
+    kept_ids = {recipe.id for recipe in kept_recipes}
     notes: list[str] = []
+
+    library = repo.list_recipes(household_id)
+    problem = check_diets(repo, ai, household_id, library, settings.diets)
+    if problem:
+        notes.append(problem)
+    recipes = [r for r in library if fits(settings.diets, r) and r.id not in kept_ids]
+    recent = recent_recipe_ids(repo, household_id, week_id, settings)
+    rules = _adjusted_rules(settings.rules, kept_recipes)
+    open_settings = settings.model_copy(update={"rules": rules})
+
+    picks = planner.pick_recipes(recipes, len(slots), rules, recent, settings.max_repeat_ratio, rng)
     new_ids: set[str] = set()
     deadline = time.monotonic() + WEB_SEARCH_SECONDS
 
-    statuses = planner.rule_status(
-        picks, len(slots), settings.rules, recent, settings.max_repeat_ratio
-    )
+    statuses = planner.rule_status(picks, len(slots), rules, recent, settings.max_repeat_ratio)
     if ai is not None and (len(picks) < len(slots) or not all(s.ok for s in statuses)):
         try:
             picks, new_ids = _fill_with_suggestions(
@@ -254,8 +316,8 @@ def generate_plan(
                 deadline,
                 picks,
                 len(slots),
-                settings,
-                [recipe.title for recipe in recipes],
+                open_settings,
+                [recipe.title for recipe in library],
             )
         except AIError as error:
             notes.append(f"Could not look for new recipes: {error}")
@@ -265,24 +327,58 @@ def generate_plan(
             f"The web search ran out of time ({WEB_SEARCH_SECONDS} seconds) before finding "
             "enough recipes, so some meals are empty. Choose them yourself, or generate again."
         )
-    if len(picks) < len(slots):
+    total = len(slots) + len(kept)
+    filled = len(picks) + len(kept)
+    if filled < total:
         notes.append(
-            f"Only {len(picks)} of {len(slots)} meals could be filled without breaking your "
+            f"Only {filled} of {total} meals could be filled without breaking your "
             "rules. Add more recipes to your library."
         )
 
+    meals = dict(kept)
+    for slot, recipe in zip(slots, picks, strict=False):
+        meals[slot] = PlanMeal(
+            recipe=recipe, portions=settings.slots[slot].portions, is_new=recipe.id in new_ids
+        )
     plan = WeekPlan(
         week_id=week_id,
-        meals={
-            slot: PlanMeal(
-                recipe=recipe, portions=settings.slots[slot].portions, is_new=recipe.id in new_ids
-            )
-            for slot, recipe in zip(slots, picks, strict=False)
-        },
+        meals={slot: meals[slot] for slot in SLOT_KEYS if slot in meals},
         notes=notes,
+        diets=settings.diets,
     )
     repo.save_plan(household_id, plan)
     return plan
+
+
+def apply_diets(
+    repo: Repo,
+    ai: RecipeAI | None,
+    household_id: str,
+    week_id: str,
+    rng: random.Random,
+    web: Web | None = None,
+) -> WeekPlan:
+    """Bring an existing plan in line with the current diets.
+
+    Meals that fit stay, with their portions; the others are replaced, from the
+    library first and then from the web. The plan goes back to draft.
+    """
+    plan = repo.get_plan(household_id, week_id)
+    if plan is None:
+        raise NotFound("There is no plan for this week yet")
+    settings = repo.get_settings(household_id)
+    planned = [meal.recipe for meal in plan.meals.values()]
+    check_diets(repo, ai, household_id, planned, settings.diets)
+    keep = {
+        slot: meal
+        for slot, meal in plan.meals.items()
+        if fits(settings.diets, meal.recipe) and slot in settings.cook_slots()
+    }
+    updated = generate_plan(repo, ai, household_id, week_id, rng, web, keep=keep)
+    if plan.status == "approved":
+        updated.notes.append("Approve the plan again to update your grocery list.")
+        repo.save_plan(household_id, updated)
+    return updated
 
 
 def set_meal(
@@ -334,7 +430,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     return planner.alternatives(
         planned,
         slot,
-        [r for r in repo.list_recipes(household_id) if fits_diet(settings.diet, r.protein)],
+        [r for r in repo.list_recipes(household_id) if fits(settings.diets, r)],
         slot_count,
         settings.rules,
         recent_recipe_ids(repo, household_id, week_id, settings),

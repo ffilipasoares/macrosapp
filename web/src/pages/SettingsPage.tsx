@@ -1,17 +1,17 @@
 import { signOut } from "firebase/auth";
-import { Bell, Copy, LogOut, X } from "lucide-react";
+import { Bell, Check, Copy, LogOut, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 import { ErrorNote, Loading, Stepper, messageOf, quietButton } from "../components/ui";
 import { auth } from "../firebase";
 import { DAY_COLORS, proteinStyle } from "../lib/style";
-import { DAYS, MEALS } from "../lib/weeks";
+import { DAYS, MEALS, defaultWeekId } from "../lib/weeks";
 import { enablePush, pushState, type PushState } from "../push";
 import { useMe } from "../session";
 import { PROTEINS, type Rule, type Settings } from "../types";
 
 const DIETS = [
-  { value: "", label: "No particular diet" },
   { value: "mediterranean", label: "Mediterranean" },
   { value: "high-protein", label: "High protein" },
   { value: "low-carb", label: "Low carb" },
@@ -31,9 +31,17 @@ export function SettingsPage() {
   const [push, setPush] = useState<PushState | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [dietDraft, setDietDraft] = useState("");
+  const [savedDiets, setSavedDiets] = useState<string[]>([]);
+  const [dietsChanged, setDietsChanged] = useState(false);
 
   useEffect(() => {
-    api.getSettings().then(setSettings).catch((e) => setError(messageOf(e)));
+    api
+      .getSettings()
+      .then((loaded) => {
+        setSettings(loaded);
+        setSavedDiets(loaded.diets ?? []);
+      })
+      .catch((e) => setError(messageOf(e)));
     void pushState().then(setPush);
   }, []);
 
@@ -52,8 +60,10 @@ export function SettingsPage() {
   const staples = settings.staples ?? [];
   const cooked = Object.values(slots).filter((slot) => slot.cook).length;
   const reference = settings.reference_portion ?? { kind: "serving" as const, grams: 400 };
-  const diet = settings.diet ?? "";
-  const customDiet = diet !== "" && !DIETS.some((choice) => choice.value === diet);
+  const diets = settings.diets ?? [];
+  const customDiets = diets.filter((diet) => !DIETS.some((choice) => choice.value === diet));
+  const toggleDiet = (diet: string) =>
+    change({ diets: diets.includes(diet) ? diets.filter((d) => d !== diet) : [...diets, diet] });
   const portionChoices = [
     { kind: "serving" as const, title: "One serving", body: "The recipe divided by how many it serves" },
     { kind: "grams" as const, title: "A fixed weight", body: "The same amount of food for every recipe" },
@@ -68,7 +78,10 @@ export function SettingsPage() {
     setSaving(true);
     setError(null);
     try {
-      setSettings(await api.saveSettings(settings!));
+      const saved = await api.saveSettings(settings!);
+      setSettings(saved);
+      setDietsChanged(JSON.stringify(saved.diets ?? []) !== JSON.stringify(savedDiets));
+      setSavedDiets(saved.diets ?? []);
       setDirty(false);
     } catch (e) {
       setError(messageOf(e));
@@ -210,51 +223,58 @@ export function SettingsPage() {
           </Section>
 
           <Section
-            title="Diet"
-            note="New recipe ideas from the web follow this diet. Vegetarian, vegan and pescatarian also keep other foods out of your plan."
+            title="Diets"
+            note="Choose as many as you like. Plans and new recipe ideas follow all of them. Vegetarian, vegan and pescatarian also rule foods out."
           >
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Diet">
-              {DIETS.map((choice) => {
-                const on = choice.value === "" ? diet === "" : diet === choice.value;
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Diets">
+              {[...DIETS, ...customDiets.map((value) => ({ value, label: value }))].map((choice) => {
+                const on = diets.includes(choice.value);
                 return (
                   <button
-                    key={choice.label}
-                    role="radio"
-                    aria-checked={on}
-                    onClick={() => {
-                      setDietDraft("");
-                      change({ diet: choice.value });
-                    }}
-                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-out ${
+                    key={choice.value}
+                    aria-pressed={on}
+                    onClick={() => toggleDiet(choice.value)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-out ${
                       on ? "bg-ink text-paper" : "bg-card text-ink ring-1 ring-line hover:ring-ink-soft"
                     }`}
                   >
+                    {on ? <Check size={14} strokeWidth={3} /> : null}
                     {choice.label}
                   </button>
                 );
               })}
             </div>
+            {diets.length === 0 ? <p className="text-sm text-ink-soft">No diet chosen: any healthy recipe.</p> : null}
             <form
               className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft"
               onSubmit={(e) => {
                 e.preventDefault();
-                const value = dietDraft.trim().toLowerCase();
-                if (value) change({ diet: value.slice(0, 60) });
+                const value = dietDraft.trim().toLowerCase().slice(0, 60);
+                if (value && !diets.includes(value)) change({ diets: [...diets, value] });
+                setDietDraft("");
               }}
             >
               <input
                 id="diet-custom"
-                value={dietDraft || (customDiet ? diet : "")}
+                value={dietDraft}
                 onChange={(e) => setDietDraft(e.target.value)}
                 maxLength={60}
-                placeholder="Or type your own, e.g. low FODMAP"
-                aria-label="Your own diet"
+                placeholder="Add your own, e.g. low FODMAP"
+                aria-label="Add your own diet"
                 className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
               />
               <button disabled={!dietDraft.trim()} className="whitespace-nowrap rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper disabled:opacity-30">
-                Use
+                Add
               </button>
             </form>
+            {dirty && JSON.stringify(diets) !== JSON.stringify(savedDiets) ? (
+              <p className="text-sm text-ink-soft">After saving, you can apply your diets to this week's plan.</p>
+            ) : null}
+            {!dirty && dietsChanged ? (
+              <Link to={`/plan/${defaultWeekId()}`} className="rounded-2xl bg-green-soft px-4 py-3 text-sm font-semibold">
+                Diets saved. Open the plan and tap “Update this week” to apply them →
+              </Link>
+            ) : null}
           </Section>
 
           <Section title="Macros portion" note="Macros are shown for one portion. Choose what one portion means.">

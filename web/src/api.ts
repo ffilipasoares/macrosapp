@@ -93,6 +93,8 @@ export const api = {
   generatePlan: (weekId: string) => request<Plan>(`/plans/${weekId}/generate`, { method: "POST" }, AI_TIMEOUT_MS),
   setMeal: (weekId: string, slot: string, change: { recipe_id: string | null; portions?: number }) =>
     request<Plan>(`/plans/${weekId}/meals/${slot}`, json("PUT", change)),
+  /** Bring an existing plan in line with the current diets, keeping meals that fit. */
+  applyDiets: (weekId: string) => request<Plan>(`/plans/${weekId}/apply-diets`, { method: "POST" }, AI_TIMEOUT_MS),
   /** Swap a meal in one tap for another recipe that keeps the rules. */
   swapMeal: (weekId: string, slot: string) => request<Plan>(`/plans/${weekId}/meals/${slot}/swap`, { method: "POST" }),
   alternatives: (weekId: string, slot: string) =>
