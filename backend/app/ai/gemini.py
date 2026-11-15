@@ -112,9 +112,20 @@ def _to_draft(recipe: _AiRecipe) -> RecipeDraft:
         raise AIError("The recipe could not be read reliably. Try a clearer image.") from error
 
 
+CALL_TIMEOUT_MS = 110_000
+# The search must leave time to read the pages within Hosting's one-minute limit.
+SEARCH_TIMEOUT_MS = 25_000
+
+
 class GeminiRecipeAI:
     def __init__(self, project: str, location: str, model: str) -> None:
-        self.client = genai.Client(vertexai=True, project=project, location=location)
+        # No call may hang: the app itself gives up after two minutes.
+        self.client = genai.Client(
+            vertexai=True,
+            project=project,
+            location=location,
+            http_options=types.HttpOptions(timeout=CALL_TIMEOUT_MS),
+        )
         self.model = model
         self.location = location
 
@@ -265,7 +276,9 @@ class GeminiRecipeAI:
                 "List each recipe's title and the address of its page."
             ],
             types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())], temperature=0.7
+                tools=[types.Tool(google_search=types.GoogleSearch())],
+                temperature=0.7,
+                http_options=types.HttpOptions(timeout=SEARCH_TIMEOUT_MS),
             ),
             "search",
         )

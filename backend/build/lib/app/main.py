@@ -1,0 +1,118 @@
+"""Application factory. Everything the app depends on can be swapped in tests."""
+
+import logging
+from collections.abc import Callable
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from app.ai.base import RecipeAI
+from app.api import household, integrations, plans, recipes
+from app.config import Config
+from app.notify import FcmNotifier, LogNotifier, Notifier
+from app.repo.base import Repo
+
+logging.basicConfig(level=logging.INFO)
+
+
+def _init_firebase(config: Config) -> None:
+    import firebase_admin
+
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(options={"projectId": config.project_id})
+
+
+def _default_repo(config: Config) -> Repo:
+    from google.cloud import firestore
+
+    from app.repo.firestore import FirestoreRepo
+
+    return FirestoreRepo(firestore.Client(project=config.project_id))
+
+
+def _default_ai(config: Config) -> RecipeAI | None:
+    if config.ai_provider == "gemini":
+        from app.ai.gemini import GeminiRecipeAI
+
+        return GeminiRecipeAI(config.project_id, config.gemini_location, config.gemini_model)
+    if config.ai_provider == "fake":
+        from app.ai.fake import FakeRecipeAI
+
+        return FakeRecipeAI()
+    return None
+
+
+def _default_verify_token(config: Config) -> Callable[[str], dict]:
+    from firebase_admin import auth
+
+    _init_firebase(config)
+    return auth.verify_id_token
+
+
+def create_app(
+    config: Config | None = None,
+    repo: Repo | None = None,
+    ai: RecipeAI | None = None,
+    notifier: Notifier | None = None,
+    verify_token: Callable[[str], dict] | None = None,
+    use_default_ai: bool = True,
+    read_link: Callable[[str], object] | None = None,
+    read_image: Callable[[str], tuple[bytes, str]] | None = None,
+    image_store: object | None = None,
+) -> FastAPI:
+    config = config or Config()
+    # The interactive API pages are switched off: there is no need to advertise the API.
+    app = FastAPI(title="Meal Planner API", version="0.1.0", docs_url=None, redoc_url=None)
+
+    app.state.config = config
+    app.state.repo = repo or _default_repo(config)
+    app.state.ai = ai if ai is not None or not use_default_ai else _default_ai(config)
+    app.state.verify_token = verify_token or _default_verify_token(config)
+    if read_link is None:
+        from app.links import read_link as default_read_link
+
+        read_link = default_read_link
+    app.state.read_link = read_link
+    if image_store is None and config.storage_bucket:
+        from app.images import FirebaseImageStore
+
+        _init_firebase(config)
+        image_store = FirebaseImageStore(config.storage_bucket)
+    from app import links
+    from app.services import Web
+
+    app.state.web = Web(
+        read_link=read_link,  # type: ignore[arg-type]
+        read_image=read_image or links.read_image,
+        images=image_store,  # type: ignore[arg-type]
+    )
+    if notifier is None:
+        if config.push_enabled:
+            _init_firebase(config)
+            notifier = FcmNotifier()
+        else:
+            notifier = LogNotifier()
+    app.state.notifier = notifier
+
+    for router in (recipes.router, plans.router, household.router, integrations.router):
+        app.include_router(router, prefix="/api")
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, error: Exception) -> JSONResponse:
+        # The full details go to the logs; the app gets a short reason it can show.
+        logging.getLogger("app").exception(
+            "Unexpected error on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"The server hit an unexpected problem ({type(error).__name__}). "
+                "The details are in the server logs."
+            },
+        )
+
+    @app.get("/healthz", include_in_schema=False)
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return app

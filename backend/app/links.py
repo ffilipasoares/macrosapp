@@ -19,7 +19,8 @@ from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
-MAX_BYTES = 3 * 1024 * 1024
+# Recipe pages are rarely bigger; anything after this is cut off (the recipe is near the top).
+MAX_BYTES = 1536 * 1024
 MAX_REDIRECTS = 5
 TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 USER_AGENT = "Mozilla/5.0 (compatible; MealPlanner/1.0; personal recipe import)"
@@ -86,13 +87,13 @@ def _fetch_bytes(
                 continue
             if response.status_code >= 400:
                 raise LinkError(f"The page answered with an error ({response.status_code}).")
-            body = b""
+            body = bytearray()  # grows in place, without copying the page on every chunk
             for chunk in response.iter_bytes():
-                body += chunk
+                body.extend(chunk)
                 if len(body) > limit:
                     break
             content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
-            return current, body, content_type, response.encoding
+            return current, bytes(body[: limit + 1]), content_type, response.encoding
     raise LinkError("The link redirects too many times.")
 
 

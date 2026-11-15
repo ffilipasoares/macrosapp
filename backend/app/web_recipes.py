@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 # All pages are opened and read at the same time, so the whole search fits in the
 # minute that Firebase Hosting waits for an answer.
-MAX_PAGES = 20
+MAX_PAGES = 12
 # The start of a page is enough to find its recipe, and shorter is much faster to read.
 MAX_PAGE_CHARS = 8000
 

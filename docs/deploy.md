@@ -38,6 +38,7 @@ openssl rand -hex 32
 gcloud run deploy mealplan-api \
   --source backend \
   --region europe-west1 \
+  --memory 1Gi \
   --allow-unauthenticated \
   --set-env-vars "GOOGLE_CLOUD_PROJECT=PROJECT,ALLOWED_EMAILS=you@example.com,APP_URL=https://PROJECT.web.app,JOB_TOKEN=THE_RANDOM_VALUE,STORAGE_BUCKET=PROJECT.firebasestorage.app"
 ```
