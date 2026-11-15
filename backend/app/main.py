@@ -63,6 +63,17 @@ def create_app(
     config = config or Config()
     # The interactive API pages are switched off: there is no need to advertise the API.
     app = FastAPI(title="Meal Planner API", version="0.1.0", docs_url=None, redoc_url=None)
+    if config.cors_origins:
+        from fastapi.middleware.cors import CORSMiddleware
+
+        # Only the app's own addresses may call the API from a browser.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.cors_origins,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+            allow_headers=["Authorization", "Content-Type"],
+            max_age=3600,
+        )
 
     app.state.config = config
     app.state.repo = repo or _default_repo(config)
@@ -85,6 +96,7 @@ def create_app(
         read_link=read_link,  # type: ignore[arg-type]
         read_image=read_image or links.read_image,
         images=image_store,  # type: ignore[arg-type]
+        search_seconds=config.web_search_seconds,
     )
     if notifier is None:
         if config.push_enabled:

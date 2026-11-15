@@ -292,12 +292,10 @@ def test_the_web_search_stops_when_time_is_up():
     assert len(find_web_recipes(ai, reader, "fish", 2, [], deadline=time.monotonic() + 30)) == 2
 
 
-def test_plan_says_when_the_search_ran_out_of_time(monkeypatch):
-    from app import services
-
-    monkeypatch.setattr(services, "WEB_SEARCH_SECONDS", -1)
+def test_plan_says_when_the_search_ran_out_of_time():
+    # The search budget comes from the server's settings (WEB_SEARCH_SECONDS).
     app = create_app(
-        config=Config(push_enabled=False),
+        config=Config(push_enabled=False, web_search_seconds=-1),
         repo=MemoryRepo(),
         ai=ListedLinks(["https://good.example/fish-1"]),
         notifier=LogNotifier(),
@@ -414,3 +412,38 @@ def test_slow_pages_are_left_out_instead_of_holding_up_the_plan(monkeypatch):
     )
     assert time.monotonic() - started < 1.9
     assert [draft.title for draft in found] == ["Fish tacos", "Grilled fish"]
+
+
+def test_the_app_may_call_the_api_directly_but_other_sites_may_not():
+    app = create_app(
+        config=Config(push_enabled=False, cors_origins=["https://meals.web.app"]),
+        repo=MemoryRepo(),
+        ai=FakeRecipeAI(),
+        notifier=LogNotifier(),
+        verify_token=lambda token: {"uid": token, "email": "a@example.com", "email_verified": True},
+        read_link=reader,
+    )
+    client = TestClient(app)
+    ask = {
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "authorization",
+    }
+    ours = client.options(
+        "/api/plans/2026-11-16/generate", headers={"Origin": "https://meals.web.app", **ask}
+    )
+    assert ours.status_code == 200
+    assert ours.headers["access-control-allow-origin"] == "https://meals.web.app"
+    theirs = client.options(
+        "/api/plans/2026-11-16/generate", headers={"Origin": "https://evil.example", **ask}
+    )
+    assert "access-control-allow-origin" not in theirs.headers
+
+
+def test_search_budget_and_allowed_sites_come_from_the_environment(monkeypatch):
+    monkeypatch.setenv("WEB_SEARCH_SECONDS", "120")
+    monkeypatch.setenv("APP_URL", "https://meals.web.app/")
+    monkeypatch.delenv("CORS_ORIGINS", raising=False)
+    config = Config()
+    assert config.web_search_seconds == 120 and config.cors_origins == ["https://meals.web.app"]
+    monkeypatch.setenv("CORS_ORIGINS", "https://meals.web.app, https://meals.firebaseapp.com")
+    assert Config().cors_origins == ["https://meals.web.app", "https://meals.firebaseapp.com"]

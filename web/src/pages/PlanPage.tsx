@@ -401,7 +401,7 @@ function EmptyWeek({ planning, onGenerate }: { planning: boolean; onGenerate: ()
       <h2 className="text-xl font-bold">{planning ? "Planning your week…" : "No plan for this week yet"}</h2>
       <p className="max-w-xs text-sm text-ink-soft">
         {planning
-          ? "Picking from your recipes and keeping your rules."
+          ? "Picking from your recipes and finding new ones on the web. This can take up to two minutes."
           : "Generate one from your recipes and rules. A plan for next week is also drafted every Friday."}
       </p>
       <button onClick={onGenerate} disabled={planning} className={`mt-2 ${primaryButton}`}>

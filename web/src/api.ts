@@ -13,6 +13,15 @@ export class ApiError extends Error {
 const DEFAULT_TIMEOUT_MS = 45_000;
 /** Reading a video, a recording or several screenshots takes longer. */
 const AI_TIMEOUT_MS = 120_000;
+/** Planning can search the web for up to the server's budget (100 s by default). */
+const PLAN_TIMEOUT_MS = 180_000;
+
+/**
+ * Where the API lives. Set VITE_API_URL to the Cloud Run address so long requests
+ * (planning with a web search) are not cut off by Firebase Hosting after 60 seconds.
+ * Empty means the same address as the app, through Hosting.
+ */
+const API_BASE = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
 
 async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const token = await auth.currentUser?.getIdToken();
@@ -24,7 +33,7 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFA
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, { ...init, headers, signal: controller.signal });
+    response = await fetch(`${API_BASE}/api${path}`, { ...init, headers, signal: controller.signal });
   } catch {
     throw controller.signal.aborted
       ? new ApiError(0, "The server took too long to answer. Check your connection and try again.")
@@ -90,11 +99,11 @@ export const api = {
 
   getPlan: (weekId: string) => request<Plan | null>(`/plans/${weekId}`),
   // Generating can search the web for new recipes when the library is short.
-  generatePlan: (weekId: string) => request<Plan>(`/plans/${weekId}/generate`, { method: "POST" }, AI_TIMEOUT_MS),
+  generatePlan: (weekId: string) => request<Plan>(`/plans/${weekId}/generate`, { method: "POST" }, PLAN_TIMEOUT_MS),
   setMeal: (weekId: string, slot: string, change: { recipe_id: string | null; portions?: number }) =>
     request<Plan>(`/plans/${weekId}/meals/${slot}`, json("PUT", change)),
   /** Bring an existing plan in line with the current diets, keeping meals that fit. */
-  applyDiets: (weekId: string) => request<Plan>(`/plans/${weekId}/apply-diets`, { method: "POST" }, AI_TIMEOUT_MS),
+  applyDiets: (weekId: string) => request<Plan>(`/plans/${weekId}/apply-diets`, { method: "POST" }, PLAN_TIMEOUT_MS),
   /** Swap a meal in one tap for another recipe that keeps the rules. */
   swapMeal: (weekId: string, slot: string) => request<Plan>(`/plans/${weekId}/meals/${slot}/swap`, { method: "POST" }),
   alternatives: (weekId: string, slot: string) =>

@@ -39,7 +39,7 @@ class NotFound(Exception):
     pass
 
 
-# Firebase Hosting gives up on a request after 60 seconds; the rest of the plan needs little.
+# How long plan generation may search the web, unless the server is configured otherwise.
 WEB_SEARCH_SECONDS = 50
 # How many recipes are judged against the diets in one AI call.
 DIET_CHECK_BATCH = 40
@@ -52,6 +52,7 @@ class Web:
     read_link: Callable[[str], LinkContent] = read_link
     read_image: Callable[[str], tuple[bytes, str]] = read_image
     images: ImageStore | None = field(default=None)
+    search_seconds: float = field(default_factory=lambda: WEB_SEARCH_SECONDS)
 
 
 def recent_recipe_ids(repo: Repo, household_id: str, week_id: str, settings: Settings) -> set[str]:
@@ -305,7 +306,8 @@ def generate_plan(
 
     picks = planner.pick_recipes(recipes, len(slots), rules, recent, settings.max_repeat_ratio, rng)
     new_ids: set[str] = set()
-    deadline = time.monotonic() + WEB_SEARCH_SECONDS
+    web = web or Web()
+    deadline = time.monotonic() + web.search_seconds
 
     statuses = planner.rule_status(picks, len(slots), rules, recent, settings.max_repeat_ratio)
     if ai is not None and (len(picks) < len(slots) or not all(s.ok for s in statuses)):
@@ -324,7 +326,7 @@ def generate_plan(
 
     if ai is not None and len(picks) < len(slots) and time.monotonic() >= deadline:
         notes.append(
-            f"The web search ran out of time ({WEB_SEARCH_SECONDS} seconds) before finding "
+            f"The web search ran out of time ({web.search_seconds:g} seconds) before finding "
             "enough recipes, so some meals are empty. Choose them yourself, or generate again."
         )
     total = len(slots) + len(kept)

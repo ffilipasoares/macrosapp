@@ -82,6 +82,24 @@ firebase deploy --only hosting,firestore,storage
 
 The app is now at `https://PROJECT.web.app`.
 
+## 3b. Let planning take longer than a minute
+
+Firebase Hosting stops any request after 60 seconds, which can cut the web search
+short ("The web search ran out of time"). To avoid that, the app can call the
+backend directly at its Cloud Run address:
+
+1. In `web/.env.local`, set `VITE_API_URL` to the Cloud Run address printed by
+   `gcloud run deploy` (for example `https://mealplan-api-abc123-ew.a.run.app`),
+   then build and deploy the web app again.
+2. Allow the app's addresses to call the backend, and give the search its budget:
+
+```bash
+gcloud run services update mealplan-api --region europe-west1 --update-env-vars "^;^CORS_ORIGINS=https://PROJECT.web.app,https://PROJECT.firebaseapp.com;WEB_SEARCH_SECONDS=100"
+```
+
+`WEB_SEARCH_SECONDS` is how long the web search may run (default 100). Without
+`VITE_API_URL`, keep it at 50 or less.
+
 ## 4. Schedule the Friday plan
 
 Use the Cloud Run address printed in step 2, not the web.app address:
