@@ -62,8 +62,16 @@ def check_url(url: str) -> str:
     return parsed.geturl()
 
 
-def fetch(client: httpx.Client, url: str, accept: str = "text/html") -> tuple[str, str]:
-    """GET a public URL, following redirects one by one. Returns (final url, body text)."""
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def _fetch_bytes(
+    client: httpx.Client, url: str, accept: str, limit: int
+) -> tuple[str, bytes, str, str | None]:
+    """GET a public URL, following redirects one by one, checking each address.
+
+    Returns (final url, body, content type, text encoding).
+    """
     current = check_url(url)
     for _ in range(MAX_REDIRECTS + 1):
         with client.stream(
@@ -81,10 +89,35 @@ def fetch(client: httpx.Client, url: str, accept: str = "text/html") -> tuple[st
             body = b""
             for chunk in response.iter_bytes():
                 body += chunk
-                if len(body) > MAX_BYTES:
+                if len(body) > limit:
                     break
-            return current, body.decode(response.encoding or "utf-8", errors="replace")
+            content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+            return current, body, content_type, response.encoding
     raise LinkError("The link redirects too many times.")
+
+
+def fetch(client: httpx.Client, url: str, accept: str = "text/html") -> tuple[str, str]:
+    """GET a public page. Returns (final url, body text)."""
+    final_url, body, _, encoding = _fetch_bytes(client, url, accept, MAX_BYTES)
+    return final_url, body.decode(encoding or "utf-8", errors="replace")
+
+
+def read_image(url: str, client: httpx.Client | None = None) -> tuple[bytes, str]:
+    """Download a photo from the web, to keep a copy of it. Returns (bytes, content type)."""
+    own_client = client is None
+    client = client or httpx.Client(timeout=TIMEOUT)
+    try:
+        _, body, content_type, _ = _fetch_bytes(client, url, "image/*", MAX_IMAGE_BYTES)
+    except httpx.HTTPError as error:
+        raise LinkError("The photo could not be downloaded.") from error
+    finally:
+        if own_client:
+            client.close()
+    if not content_type.startswith("image/") or content_type == "image/svg+xml":
+        raise LinkError("That address is not a photo.")
+    if len(body) > MAX_IMAGE_BYTES:
+        raise LinkError("The photo is larger than 5 MB.")
+    return body, content_type
 
 
 def is_tiktok(url: str) -> bool:
@@ -107,7 +140,11 @@ def tiktok_caption(client: httpx.Client, url: str) -> LinkContent:
         )
     author = str(data.get("author_name") or "").strip()
     text = f"TikTok video by {author}\n\n{caption}" if author else caption
-    return LinkContent(url=final_url, text=text, kind="tiktok")
+    # The video's cover image. TikTok's image links expire after a few days, so the
+    # app keeps its own copy when the recipe is saved.
+    thumbnail = str(data.get("thumbnail_url") or "").strip()
+    image = thumbnail if thumbnail.startswith("https://") and len(thumbnail) <= 2000 else None
+    return LinkContent(url=final_url, text=text, kind="tiktok", image_url=image)
 
 
 def _find_recipe(node: object) -> dict | None:

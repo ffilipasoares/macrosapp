@@ -74,10 +74,6 @@ class _AiRecipe(BaseModel):
     source_url: str | None
 
 
-class _AiRecipeList(BaseModel):
-    recipes: list[_AiRecipe]
-
-
 def _to_draft(recipe: _AiRecipe) -> RecipeDraft:
     ingredients = []
     for item in recipe.ingredients:
@@ -209,42 +205,34 @@ class GeminiRecipeAI:
             draft.source_url = source_url
         return draft
 
-    def search_recipes(self, query: str, count: int, avoid_titles: list[str]) -> list[RecipeDraft]:
-        # Google Search grounding and JSON output are separate calls: search first, then structure.
+    def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
+        """Addresses of recipe pages that Google Search really returned.
+
+        The addresses come from the search's grounding data, not from the model's
+        own writing, so they point at pages that exist. Each one is still opened
+        and checked before it is used.
+        """
         avoid = "; ".join(avoid_titles[:60]) or "none"
-        found = self._call(
+        response = self._call(
             [
-                f"Find {count} different real recipes on the web for: {query}. "
-                "Prefer healthy home-cooked dinners. For each one give the title, the page URL, "
-                "servings, the full ingredient list with amounts and the method. "
-                f"Do not include recipes similar to these: {avoid}."
+                f"Use Google Search to find {count * 2} different recipe pages for: {query}. "
+                "Each must be a page for one single recipe with a photo, not a list or a "
+                "collection. Prefer healthy home-cooked dinners from well-known recipe websites. "
+                f"Do not include recipes similar to these: {avoid}. "
+                "List each recipe's title and the address of its page."
             ],
             types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())], temperature=0.7
             ),
             "search",
         )
-        text = found.text or ""
-        if not text.strip():
-            log.warning("Gemini search returned no text for %r", query)
-            return []
-
-        prompt = (
-            f"Structure the recipes in the text below as a list of at most {count}. Set found to "
-            "true for each real recipe and copy its page URL into source_url."
-            + _RULES
-            + "\n<<<SEARCH RESULTS\n"
-            + text
-            + "\nSEARCH RESULTS>>>"
-        )
-        result = self._structured([prompt], _AiRecipeList, "search structuring")
-        drafts = []
-        for recipe in result.recipes[:count]:
-            if recipe.found and recipe.title.strip():
-                try:
-                    drafts.append(_to_draft(recipe))
-                except AIError:
-                    continue
-        # Prefer complete recipes; if none came back complete, still show what was found.
-        complete = [draft for draft in drafts if draft.ingredients]
-        return complete or drafts
+        urls: list[str] = []
+        for candidate in response.candidates or []:
+            metadata = candidate.grounding_metadata
+            for chunk in (metadata.grounding_chunks or []) if metadata else []:
+                uri = chunk.web.uri if chunk.web else None
+                if uri and uri not in urls:
+                    urls.append(uri)
+        if not urls:
+            log.warning("Gemini search for %r returned no source pages", query)
+        return urls[: count * 3]

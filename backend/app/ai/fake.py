@@ -52,21 +52,14 @@ class FakeRecipeAI:
         first_line = text.strip().splitlines()[0][:80] if text.strip() else ""
         if not first_line or "no recipe here" in text.lower():
             raise AIError("No recipe was found in what you sent.")
-        return _SAMPLE.model_copy(deep=True, update={"title": first_line, "source_url": source_url})
-
-    def search_recipes(self, query: str, count: int, avoid_titles: list[str]) -> list[RecipeDraft]:
         protein = next(
-            (p for p in ("chicken", "fish", "beef", "pork", "vegetarian") if p in query.lower()),
-            "vegetarian",
+            (p for p in ("fish", "chicken", "beef", "pork", "vegetarian") if p in text.lower()),
+            _SAMPLE.protein,
         )
-        return [
-            _SAMPLE.model_copy(
-                deep=True,
-                update={
-                    "title": f"Sample {query.strip()} idea {index + 1}",
-                    "protein": protein,
-                    "source_url": "https://example.com/recipe",
-                },
-            )
-            for index in range(count)
-        ]
+        return _SAMPLE.model_copy(
+            deep=True, update={"title": first_line, "source_url": source_url, "protein": protein}
+        )
+
+    def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
+        slug = "-".join(query.lower().split())
+        return [f"https://recipes.example/{slug}-{index + 1}" for index in range(count * 2)]

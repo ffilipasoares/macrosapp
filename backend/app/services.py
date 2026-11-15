@@ -3,6 +3,8 @@
 import logging
 import random
 import re
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -11,6 +13,8 @@ from app.core import planner
 from app.core.grocery import build_grocery_lines
 from app.core.ingredients import guess_aisle, normalize_name
 from app.core.weeks import SLOT_KEYS, next_week_id, previous_week_ids
+from app.images import ImageStore, keep_own_copy
+from app.links import LinkContent, read_image, read_link
 from app.models import (
     Alternative,
     GroceryItem,
@@ -23,12 +27,22 @@ from app.models import (
 )
 from app.notify import Notifier
 from app.repo.base import Repo
+from app.web_recipes import find_web_recipes
 
 log = logging.getLogger(__name__)
 
 
 class NotFound(Exception):
     pass
+
+
+@dataclass
+class Web:
+    """How the app reaches the internet: reading recipe pages and keeping copies of photos."""
+
+    read_link: Callable[[str], LinkContent] = read_link
+    read_image: Callable[[str], tuple[bytes, str]] = read_image
+    images: ImageStore | None = field(default=None)
 
 
 def recent_recipe_ids(repo: Repo, household_id: str, week_id: str, settings: Settings) -> set[str]:
@@ -58,6 +72,7 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
 
 def _fill_with_suggestions(
     ai: RecipeAI,
+    web: Web,
     picks: list[Recipe],
     slot_count: int,
     settings: Settings,
@@ -80,7 +95,8 @@ def _fill_with_suggestions(
         )
 
     def suggest(query: str, amount: int) -> list[Recipe]:
-        recipes = [Recipe(**d.model_dump()) for d in ai.search_recipes(query, amount, titles)]
+        drafts = find_web_recipes(ai, web.read_link, query, amount, titles)
+        recipes = [Recipe(**draft.model_dump()) for draft in drafts]
         titles.extend(recipe.title for recipe in recipes)
         return recipes
 
@@ -117,7 +133,12 @@ def _fill_with_suggestions(
 
 
 def generate_plan(
-    repo: Repo, ai: RecipeAI | None, household_id: str, week_id: str, rng: random.Random
+    repo: Repo,
+    ai: RecipeAI | None,
+    household_id: str,
+    week_id: str,
+    rng: random.Random,
+    web: Web | None = None,
 ) -> WeekPlan:
     """Build a draft plan for a week and save it under the week's id."""
     settings = repo.get_settings(household_id)
@@ -137,7 +158,7 @@ def generate_plan(
     if ai is not None and (len(picks) < len(slots) or not all(s.ok for s in statuses)):
         try:
             picks, new_ids = _fill_with_suggestions(
-                ai, picks, len(slots), settings, [recipe.title for recipe in recipes]
+                ai, web or Web(), picks, len(slots), settings, [recipe.title for recipe in recipes]
             )
         except AIError as error:
             notes.append(f"Could not look for new recipes: {error}")
@@ -219,7 +240,9 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     )
 
 
-def approve_plan(repo: Repo, household_id: str, week_id: str) -> tuple[WeekPlan, int]:
+def approve_plan(
+    repo: Repo, household_id: str, week_id: str, web: Web | None = None
+) -> tuple[WeekPlan, int]:
     """Lock in the plan and turn it into grocery items. Safe to run more than once."""
     plan = repo.get_plan(household_id, week_id)
     if plan is None:
@@ -247,7 +270,13 @@ def approve_plan(repo: Repo, household_id: str, week_id: str) -> tuple[WeekPlan,
 
     # Remember when each recipe was last cooked; keep recipes that came from a web suggestion.
     for meal in ordered:
-        stored = repo.get_recipe(household_id, meal.recipe.id) or meal.recipe
+        stored = repo.get_recipe(household_id, meal.recipe.id)
+        if stored is None:
+            # A new idea from the web joins the library, with our own copy of its photo.
+            stored = meal.recipe
+            if web is not None:
+                keep_own_copy(web.images, web.read_image, household_id, stored)
+                meal.recipe.image_url = stored.image_url
         if (stored.last_planned_week or "") < week_id:
             stored.last_planned_week = week_id
         repo.save_recipe(household_id, stored)
@@ -288,6 +317,7 @@ def run_weekly_job(
     app_url: str,
     today: date | None = None,
     rng: random.Random | None = None,
+    web: Web | None = None,
 ) -> dict[str, int]:
     """Draft next week's plan for every household and tell them it is ready.
 
@@ -303,7 +333,7 @@ def run_weekly_job(
             if repo.get_plan(household.id, target) is not None:
                 summary["skipped"] += 1
                 continue
-            generate_plan(repo, ai, household.id, target, rng or random.Random())
+            generate_plan(repo, ai, household.id, target, rng or random.Random(), web)
             invalid = notifier.send(
                 household.device_tokens,
                 "Meal plan ready",

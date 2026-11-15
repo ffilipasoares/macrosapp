@@ -6,7 +6,8 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from app.ai.base import AIError, RecipeAI
-from app.deps import AIDep, CurrentHousehold, RepoDep
+from app.deps import AIDep, CurrentHousehold, RepoDep, WebDep
+from app.images import keep_own_copy
 from app.links import LinkContent, LinkError
 from app.models import Recipe, RecipeDraft
 
@@ -130,8 +131,12 @@ def list_recipes(household: CurrentHousehold, repo: RepoDep) -> list[Recipe]:
 
 
 @router.post("", status_code=201)
-def create_recipe(draft: RecipeDraft, household: CurrentHousehold, repo: RepoDep) -> Recipe:
+def create_recipe(
+    draft: RecipeDraft, household: CurrentHousehold, repo: RepoDep, web: WebDep
+) -> Recipe:
     recipe = Recipe(**draft.model_dump())
+    # A photo from a web page or TikTok is copied, so it keeps working.
+    keep_own_copy(web.images, web.read_image, household.id, recipe)
     repo.save_recipe(household.id, recipe)
     return recipe
 
@@ -146,7 +151,7 @@ def get_recipe(recipe_id: str, household: CurrentHousehold, repo: RepoDep) -> Re
 
 @router.put("/{recipe_id}")
 def update_recipe(
-    recipe_id: str, draft: RecipeDraft, household: CurrentHousehold, repo: RepoDep
+    recipe_id: str, draft: RecipeDraft, household: CurrentHousehold, repo: RepoDep, web: WebDep
 ) -> Recipe:
     existing = repo.get_recipe(household.id, recipe_id)
     if existing is None:
@@ -154,6 +159,8 @@ def update_recipe(
     # Saving an edit counts as reviewing it.
     recipe = existing.model_copy(update={**draft.model_dump(), "needs_review": False})
     recipe = Recipe.model_validate(recipe.model_dump())
+    if recipe.image_url != existing.image_url:
+        keep_own_copy(web.images, web.read_image, household.id, recipe)
     repo.save_recipe(household.id, recipe)
     return recipe
 

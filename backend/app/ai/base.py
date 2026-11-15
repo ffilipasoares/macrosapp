@@ -26,6 +26,6 @@ class RecipeAI(Protocol):
         """Structure a recipe given as free text, in any language."""
         ...
 
-    def search_recipes(self, query: str, count: int, avoid_titles: list[str]) -> list[RecipeDraft]:
-        """Find up to ``count`` real recipes on the web for a query."""
+    def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
+        """Addresses of recipe pages found by a web search. They are checked before use."""
         ...

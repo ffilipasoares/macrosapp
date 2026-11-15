@@ -21,8 +21,10 @@ from app.deps import (
     OptionalAIDep,
     RepoDep,
     ShortcutHousehold,
+    WebDep,
     scheduler_only,
 )
+from app.images import keep_own_copy
 from app.models import Recipe, RecipeDraft
 from app.repo.base import Repo
 
@@ -39,8 +41,12 @@ class Spoken(BaseModel):
     message: str
 
 
-def _save_for_review(repo: Repo, household_id: str, draft: RecipeDraft) -> Spoken:
+def _save_for_review(
+    repo: Repo, household_id: str, draft: RecipeDraft, web: object | None = None
+) -> Spoken:
     recipe = Recipe(**draft.model_dump(), needs_review=True)
+    if web is not None:
+        keep_own_copy(web.images, web.read_image, household_id, recipe)  # type: ignore[attr-defined]
     repo.save_recipe(household_id, recipe)
     return Spoken(message=f"Saved {recipe.title}. Check it in the app.")
 
@@ -94,16 +100,21 @@ async def share_recipe_audio(
 
 @router.post("/shortcuts/recipe-link")
 def share_recipe_link(
-    body: LinkImport, household: ShortcutHousehold, repo: RepoDep, ai: AIDep, request: Request
+    body: LinkImport,
+    household: ShortcutHousehold,
+    repo: RepoDep,
+    ai: AIDep,
+    request: Request,
+    web: WebDep,
 ) -> Spoken:
     """Share sheet: read a TikTok caption or recipe page and save it, flagged for review."""
     draft = import_link(ai, get_link_reader(request), body.url)
-    return _save_for_review(repo, household.id, draft)
+    return _save_for_review(repo, household.id, draft, web)
 
 
 @router.post("/jobs/weekly-plan", dependencies=[Depends(scheduler_only)])
 def weekly_plan(
-    repo: RepoDep, ai: OptionalAIDep, notifier: NotifierDep, config: ConfigDep
+    repo: RepoDep, ai: OptionalAIDep, notifier: NotifierDep, config: ConfigDep, web: WebDep
 ) -> dict[str, int]:
     """Called by Cloud Scheduler every Friday."""
-    return services.run_weekly_job(repo, ai, notifier, config.app_url)
+    return services.run_weekly_job(repo, ai, notifier, config.app_url, web=web)

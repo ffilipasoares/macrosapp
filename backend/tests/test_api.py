@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 from app import services
 from app.ai.fake import FakeRecipeAI
 from app.config import Config
+from app.images import MemoryImageStore
+from app.links import LinkContent, LinkError
 from app.main import create_app
 from app.notify import LogNotifier
 from app.repo.memory import MemoryRepo
@@ -26,6 +28,24 @@ def auth(user: str = "ana") -> dict[str, str]:
     return {"Authorization": f"Bearer {user}"}
 
 
+def fake_web_page(url: str) -> LinkContent:
+    """A simulated web: every recipes.example page is a working recipe with a photo."""
+    if not url.startswith("https://recipes.example/"):
+        raise LinkError("The link could not be opened.")
+    slug = url.rsplit("/", 1)[1]
+    title = slug.replace("-", " ").capitalize()
+    return LinkContent(
+        url=url,
+        text=f"{title}\nIngredients:\n- 1 onion",
+        kind="recipe-data",
+        image_url=f"https://cdn.example/{slug}.jpg",
+    )
+
+
+def fake_image(url: str) -> tuple[bytes, str]:
+    return b"jpeg bytes", "image/jpeg"
+
+
 @pytest.fixture
 def ctx():
     repo, notifier = MemoryRepo(), LogNotifier()
@@ -35,6 +55,9 @@ def ctx():
         ai=FakeRecipeAI(),
         notifier=notifier,
         verify_token=fake_verify,
+        read_link=fake_web_page,
+        read_image=fake_image,
+        image_store=MemoryImageStore(),
     )
     return TestClient(app), repo, notifier
 
@@ -212,9 +235,16 @@ def test_empty_library_is_filled_with_suggestions_and_kept_on_approval(ctx):
     assert all(meal["is_new"] for meal in plan["meals"].values())
     assert client.get("/api/recipes", headers=auth()).json() == []
 
+    # Every new idea comes from a page that was opened, and has its photo.
+    for meal in plan["meals"].values():
+        assert meal["recipe"]["source_url"].startswith("https://recipes.example/")
+        assert meal["recipe"]["image_url"].startswith("https://cdn.example/")
+
     client.post(f"/api/plans/{WEEK}/approve", headers=auth())
     saved = client.get("/api/recipes", headers=auth()).json()
     assert len(saved) == 9 and all(recipe["last_planned_week"] == WEEK for recipe in saved)
+    # Once saved, each photo is our own copy, so it keeps working.
+    assert all(recipe["image_url"].startswith("https://images.test/") for recipe in saved)
 
 
 def test_without_ai_a_small_library_leaves_open_slots():

@@ -39,7 +39,7 @@ gcloud run deploy mealplan-api \
   --source backend \
   --region europe-west1 \
   --allow-unauthenticated \
-  --set-env-vars "GOOGLE_CLOUD_PROJECT=PROJECT,ALLOWED_EMAILS=you@example.com,APP_URL=https://PROJECT.web.app,JOB_TOKEN=THE_RANDOM_VALUE"
+  --set-env-vars "GOOGLE_CLOUD_PROJECT=PROJECT,ALLOWED_EMAILS=you@example.com,APP_URL=https://PROJECT.web.app,JOB_TOKEN=THE_RANDOM_VALUE,STORAGE_BUCKET=PROJECT.firebasestorage.app"
 ```
 
 - `ALLOWED_EMAILS` is the shared Google account. Nobody else can sign in.
@@ -49,9 +49,14 @@ gcloud run deploy mealplan-api \
   `europe-west1`. Check the current model names in the Vertex AI console and
   override with `--set-env-vars` if that one has been retired.
 
+- `STORAGE_BUCKET` is your Storage bucket (the `storageBucket` value in the web
+  app config). Photos of recipes taken from the web are copied there when you
+  save them, so they keep working after the website or TikTok link changes.
+  Without it, those photos are shown from the original website.
+
 The service account Cloud Run uses needs these roles (IAM → grant):
-**Cloud Datastore User**, **Vertex AI User** and
-**Firebase Cloud Messaging API Admin**.
+**Cloud Datastore User**, **Vertex AI User**,
+**Firebase Cloud Messaging API Admin** and **Storage Object Admin**.
 
 ## 3. Deploy the web app and database rules
 

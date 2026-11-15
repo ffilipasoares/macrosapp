@@ -25,4 +25,7 @@ class Config:
     )
     # Public address of the web app, used as the link in push notifications.
     app_url: str = field(default_factory=lambda: os.getenv("APP_URL", ""))
+    # Firebase Storage bucket (e.g. "PROJECT.firebasestorage.app") for copies of web photos.
+    # Empty means web photos are shown from their original address instead.
+    storage_bucket: str = field(default_factory=lambda: os.getenv("STORAGE_BUCKET", ""))
     push_enabled: bool = field(default_factory=lambda: os.getenv("PUSH_ENABLED", "true") == "true")

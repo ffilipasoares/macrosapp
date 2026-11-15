@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app import services
 from app.core.weeks import parse_week_id
-from app.deps import CurrentHousehold, OptionalAIDep, RepoDep
+from app.deps import CurrentHousehold, OptionalAIDep, RepoDep, WebDep
 from app.models import Alternative, PlanOut
 
 router = APIRouter(prefix="/plans", tags=["plans"])
@@ -39,9 +39,9 @@ def get_plan(week_id: str, household: CurrentHousehold, repo: RepoDep) -> PlanOu
 
 @router.post("/{week_id}/generate")
 def generate(
-    week_id: str, household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep
+    week_id: str, household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep, web: WebDep
 ) -> PlanOut:
-    plan = services.generate_plan(repo, ai, household.id, _week(week_id), random.Random())
+    plan = services.generate_plan(repo, ai, household.id, _week(week_id), random.Random(), web)
     return services.plan_out(repo, household.id, plan)
 
 
@@ -69,9 +69,9 @@ def alternatives(
 
 
 @router.post("/{week_id}/approve")
-def approve(week_id: str, household: CurrentHousehold, repo: RepoDep) -> ApproveResult:
+def approve(week_id: str, household: CurrentHousehold, repo: RepoDep, web: WebDep) -> ApproveResult:
     try:
-        plan, count = services.approve_plan(repo, household.id, _week(week_id))
+        plan, count = services.approve_plan(repo, household.id, _week(week_id), web)
     except services.NotFound as error:
         raise HTTPException(404, str(error)) from error
     return ApproveResult(plan=services.plan_out(repo, household.id, plan), grocery_items=count)

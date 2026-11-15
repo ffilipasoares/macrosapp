@@ -56,6 +56,8 @@ def create_app(
     verify_token: Callable[[str], dict] | None = None,
     use_default_ai: bool = True,
     read_link: Callable[[str], object] | None = None,
+    read_image: Callable[[str], tuple[bytes, str]] | None = None,
+    image_store: object | None = None,
 ) -> FastAPI:
     config = config or Config()
     # The interactive API pages are switched off: there is no need to advertise the API.
@@ -70,6 +72,19 @@ def create_app(
 
         read_link = default_read_link
     app.state.read_link = read_link
+    if image_store is None and config.storage_bucket:
+        from app.images import FirebaseImageStore
+
+        _init_firebase(config)
+        image_store = FirebaseImageStore(config.storage_bucket)
+    from app import links
+    from app.services import Web
+
+    app.state.web = Web(
+        read_link=read_link,  # type: ignore[arg-type]
+        read_image=read_image or links.read_image,
+        images=image_store,  # type: ignore[arg-type]
+    )
     if notifier is None:
         if config.push_enabled:
             _init_firebase(config)

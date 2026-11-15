@@ -10,6 +10,7 @@ from app.config import Config
 from app.models import Household
 from app.notify import Notifier
 from app.repo.base import Repo
+from app.services import Web
 
 
 def get_repo(request: Request) -> Repo:
@@ -22,6 +23,10 @@ def get_config(request: Request) -> Config:
 
 def get_notifier(request: Request) -> Notifier:
     return request.app.state.notifier
+
+
+def get_web(request: Request):
+    return request.app.state.web
 
 
 def get_optional_ai(request: Request) -> RecipeAI | None:
@@ -83,3 +88,4 @@ AIDep = Annotated[RecipeAI, Depends(get_ai)]
 OptionalAIDep = Annotated[RecipeAI | None, Depends(get_optional_ai)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 NotifierDep = Annotated[Notifier, Depends(get_notifier)]
+WebDep = Annotated["Web", Depends(get_web)]
