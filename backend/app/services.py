@@ -39,7 +39,7 @@ class NotFound(Exception):
 
 
 # Firebase Hosting gives up on a request after 60 seconds; the rest of the plan needs little.
-WEB_SEARCH_SECONDS = 40
+WEB_SEARCH_SECONDS = 50
 
 
 @dataclass
@@ -161,6 +161,64 @@ def _fill_with_suggestions(
         take(
             min(candidates, key=lambda recipe: sum(1 for p in picks if p.protein == recipe.protein))
         )
+
+    # If some web pages failed to load or did not cover every rule/slot, fill the remaining
+    # gaps directly so a single Generate always produces a complete week.
+    remaining_needs = {rule.tag: rule.count - count(rule.tag) for rule in min_rules}
+    remaining_needs = {tag: missing for tag, missing in remaining_needs.items() if missing > 0}
+    remaining_gaps = max(0, slot_count - len(picks))
+    fallback_fn = getattr(ai, "generate_fallback_recipes", None)
+    if (
+        (remaining_needs or remaining_gaps > 0)
+        and callable(fallback_fn)
+        and time.monotonic() < deadline
+    ):
+        forbidden = [rule.tag for rule in max_rules if count(rule.tag) >= rule.count]
+        used_titles = [*titles, *(r.title for r in picks)]
+        try:
+            extra_drafts = fallback_fn(
+                remaining_needs, remaining_gaps, forbidden, used_titles, settings.diet
+            )
+            extra_found = [
+                Recipe(**draft.model_dump())
+                for draft in extra_drafts
+                if fits_diet(settings.diet, draft.protein)
+            ]
+        except AIError as error:
+            log.warning("Fallback recipe generation failed: %s", error)
+            extra_found = []
+
+        for rule in min_rules:
+            for recipe in [r for r in extra_found if planner.matches(r, rule.tag)]:
+                if count(rule.tag) >= rule.count or not allowed(recipe):
+                    continue
+                if len(picks) >= slot_count:
+                    spare = next(
+                        (
+                            index
+                            for index in range(len(picks) - 1, -1, -1)
+                            if not any(planner.matches(picks[index], r.tag) for r in min_rules)
+                        ),
+                        None,
+                    )
+                    if spare is None:
+                        break
+                    picks.pop(spare)
+                extra_found.remove(recipe)
+                picks.append(recipe)
+                new_ids.add(recipe.id)
+
+        while len(picks) < slot_count:
+            candidates = [recipe for recipe in extra_found if allowed(recipe)]
+            if not candidates:
+                break
+            best = min(
+                candidates, key=lambda recipe: sum(1 for p in picks if p.protein == recipe.protein)
+            )
+            extra_found.remove(best)
+            picks.append(best)
+            new_ids.add(best.id)
+
     return picks, new_ids
 
 

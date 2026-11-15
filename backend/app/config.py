@@ -19,9 +19,9 @@ class Config:
     job_token: str = field(default_factory=lambda: os.getenv("JOB_TOKEN", ""))
     # "gemini" in production, "fake" for local development, "none" to switch AI off.
     ai_provider: str = field(default_factory=lambda: os.getenv("AI_PROVIDER", "gemini"))
-    gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
+    gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-3.5-flash"))
     gemini_location: str = field(
-        default_factory=lambda: os.getenv("GEMINI_LOCATION", "europe-west1")
+        default_factory=lambda: os.getenv("GEMINI_LOCATION", "global")
     )
     # Public address of the web app, used as the link in push notifications.
     app_url: str = field(default_factory=lambda: os.getenv("APP_URL", ""))
