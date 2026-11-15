@@ -50,8 +50,45 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import Image */
-        post: operations["import_image_api_recipes_import_image_post"];
+        /**
+         * Import Images
+         * @description One recipe from one or more screenshots, in the order they are sent.
+         */
+        post: operations["import_images_api_recipes_import_image_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/recipes/import/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Video */
+        post: operations["import_video_api_recipes_import_video_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/recipes/import/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Link Route */
+        post: operations["import_link_route_api_recipes_import_link_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -283,10 +320,50 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Share Recipe
-         * @description Share sheet: read a screenshot and save the recipe, flagged for review in the app.
+         * Share Recipe Images
+         * @description Share sheet: read one or more screenshots and save the recipe, flagged for review.
          */
-        post: operations["share_recipe_api_shortcuts_recipe_image_post"];
+        post: operations["share_recipe_images_api_shortcuts_recipe_image_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shortcuts/recipe-video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Recipe Video
+         * @description Share sheet: watch a saved cooking video and save the recipe, flagged for review.
+         */
+        post: operations["share_recipe_video_api_shortcuts_recipe_video_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shortcuts/recipe-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Recipe Link
+         * @description Share sheet: read a TikTok caption or recipe page and save it, flagged for review.
+         */
+        post: operations["share_recipe_link_api_shortcuts_recipe_link_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -329,15 +406,39 @@ export interface components {
             /** Grocery Items */
             grocery_items: number;
         };
-        /** Body_import_image_api_recipes_import_image_post */
-        Body_import_image_api_recipes_import_image_post: {
+        /** Body_import_images_api_recipes_import_image_post */
+        Body_import_images_api_recipes_import_image_post: {
+            /** Files */
+            files?: string[] | null;
             /** File */
-            file: string;
+            file?: string | null;
         };
-        /** Body_share_recipe_api_shortcuts_recipe_image_post */
-        Body_share_recipe_api_shortcuts_recipe_image_post: {
+        /** Body_import_video_api_recipes_import_video_post */
+        Body_import_video_api_recipes_import_video_post: {
             /** File */
             file: string;
+            /**
+             * Caption
+             * @default
+             */
+            caption: string;
+        };
+        /** Body_share_recipe_images_api_shortcuts_recipe_image_post */
+        Body_share_recipe_images_api_shortcuts_recipe_image_post: {
+            /** Files */
+            files?: string[] | null;
+            /** File */
+            file?: string | null;
+        };
+        /** Body_share_recipe_video_api_shortcuts_recipe_video_post */
+        Body_share_recipe_video_api_shortcuts_recipe_video_post: {
+            /** File */
+            file: string;
+            /**
+             * Caption
+             * @default
+             */
+            caption: string;
         };
         /** DeviceToken */
         DeviceToken: {
@@ -411,6 +512,11 @@ export interface components {
         ItemText: {
             /** Text */
             text: string;
+        };
+        /** LinkImport */
+        LinkImport: {
+            /** Url */
+            url: string;
         };
         /** Me */
         Me: {
@@ -832,7 +938,42 @@ export interface operations {
             };
         };
     };
-    import_image_api_recipes_import_image_post: {
+    import_images_api_recipes_import_image_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_images_api_recipes_import_image_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDraft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_video_api_recipes_import_video_post: {
         parameters: {
             query?: never;
             header?: {
@@ -843,7 +984,42 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_import_image_api_recipes_import_image_post"];
+                "multipart/form-data": components["schemas"]["Body_import_video_api_recipes_import_video_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipeDraft"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_link_route_api_recipes_import_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkImport"];
             };
         };
         responses: {
@@ -1339,7 +1515,42 @@ export interface operations {
             };
         };
     };
-    share_recipe_api_shortcuts_recipe_image_post: {
+    share_recipe_images_api_shortcuts_recipe_image_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_share_recipe_images_api_shortcuts_recipe_image_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Spoken"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_recipe_video_api_shortcuts_recipe_video_post: {
         parameters: {
             query?: never;
             header?: {
@@ -1350,7 +1561,42 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_share_recipe_api_shortcuts_recipe_image_post"];
+                "multipart/form-data": components["schemas"]["Body_share_recipe_video_api_shortcuts_recipe_video_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Spoken"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_recipe_link_api_shortcuts_recipe_link_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkImport"];
             };
         };
         responses: {

@@ -1,11 +1,14 @@
-import { Camera, ClipboardPaste, Globe, PenLine, Plus, Search } from "lucide-react";
+import { Camera, ClipboardPaste, Clapperboard, Globe, ImagePlus, Link2, PenLine, Plus, Search, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { ErrorNote, Loading, ProteinDot, Sheet, Thumb, listButton, messageOf, primaryButton } from "../components/ui";
 import type { Recipe, RecipeDraft } from "../types";
 
-type AddMode = "menu" | "text" | "search";
+type AddMode = "menu" | "images" | "video" | "text" | "search";
+
+const MAX_IMAGES = 10;
+const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
 
 export function RecipesPage() {
   const navigate = useNavigate();
@@ -137,12 +140,21 @@ function AddSheet({
   onClose: () => void;
 }) {
   const navigate = useNavigate();
-  const fileInput = useRef<HTMLInputElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const videoInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<RecipeDraft[] | null>(null);
+  const [images, setImages] = useState<{ file: File; url: string }[]>([]);
+  const [link, setLink] = useState("");
+  const [video, setVideo] = useState<File | null>(null);
+  const [caption, setCaption] = useState("");
+
+  // Free the image previews when the sheet closes.
+  const previewUrls = useRef<string[]>([]);
+  useEffect(() => () => previewUrls.current.forEach((url) => URL.revokeObjectURL(url)), []);
 
   async function run<T>(work: () => Promise<T>, done: (value: T) => void) {
     setBusy(true);
@@ -154,6 +166,171 @@ function AddSheet({
     } finally {
       setBusy(false);
     }
+  }
+
+  function addImages(list: FileList | null) {
+    const picked = Array.from(list ?? []).filter((file) => file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name));
+    if (!picked.length) return;
+    const room = MAX_IMAGES - images.length;
+    if (picked.length > room) setError(`One recipe can use up to ${MAX_IMAGES} images.`);
+    const added = picked.slice(0, room).map((file) => ({ file, url: URL.createObjectURL(file) }));
+    previewUrls.current.push(...added.map((image) => image.url));
+    setImages([...images, ...added]);
+    setMode("images");
+  }
+
+  function pickVideo(list: FileList | null) {
+    const file = list?.[0];
+    if (!file) return;
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("That video is larger than 20 MB. Trim it, or send screenshots instead.");
+      return;
+    }
+    setError(null);
+    setVideo(file);
+  }
+
+  const hiddenInputs = (
+    <>
+      <input
+        ref={imageInput}
+        id="screenshot-file"
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          addImages(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={videoInput}
+        id="video-file"
+        type="file"
+        accept="video/*"
+        hidden
+        onChange={(e) => {
+          pickVideo(e.target.files);
+          e.target.value = "";
+        }}
+      />
+    </>
+  );
+
+  if (mode === "images") {
+    return (
+      <Sheet title="Screenshots" subtitle="Add every screenshot of the recipe, in order. They are read together as one recipe." onClose={onClose}>
+        {hiddenInputs}
+        <ErrorNote message={error} />
+        <ol className="grid grid-cols-3 gap-2">
+          {images.map((image, index) => (
+            <li key={image.url} className="relative aspect-[3/5] overflow-hidden rounded-2xl bg-card ring-1 ring-line">
+              <img src={image.url} alt={`Screenshot ${index + 1}`} className="h-full w-full object-cover" />
+              <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-ink text-xs font-bold text-paper">{index + 1}</span>
+              <button
+                onClick={() => setImages(images.filter((_, i) => i !== index))}
+                disabled={busy}
+                aria-label={`Remove screenshot ${index + 1}`}
+                className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-card/90 text-ink"
+              >
+                <X size={14} />
+              </button>
+            </li>
+          ))}
+          {images.length < MAX_IMAGES ? (
+            <li>
+              <button
+                onClick={() => imageInput.current?.click()}
+                disabled={busy}
+                className="flex aspect-[3/5] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-ink-soft/40 text-sm font-semibold text-ink-soft hover:bg-card"
+              >
+                <ImagePlus size={22} />
+                Add more
+              </button>
+            </li>
+          ) : null}
+        </ol>
+        <button className={primaryButton} disabled={busy || images.length === 0} onClick={() => run(() => api.importImages(images.map((i) => i.file)), onDraft)}>
+          {busy ? `Reading ${images.length} image${images.length > 1 ? "s" : ""}…` : `Read recipe from ${images.length} image${images.length === 1 ? "" : "s"}`}
+        </button>
+      </Sheet>
+    );
+  }
+
+  if (mode === "video") {
+    return (
+      <Sheet title="TikTok or video" subtitle="Paste a TikTok or recipe link, or choose a cooking video you saved." onClose={onClose}>
+        {hiddenInputs}
+        <ErrorNote message={error} />
+        <form
+          className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run(() => api.importLink(link.trim()), onDraft);
+          }}
+        >
+          <input
+            id="recipe-link"
+            type="url"
+            inputMode="url"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="https://vm.tiktok.com/…"
+            aria-label="Link to a TikTok or recipe page"
+            className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
+          />
+          <button disabled={busy || link.trim().length < 8} className="whitespace-nowrap rounded-full bg-orange px-4 py-2 text-sm font-semibold text-card disabled:opacity-40">
+            {busy && !video ? "Reading…" : "Read link"}
+          </button>
+        </form>
+        <p className="text-xs text-ink-soft">
+          A TikTok link reads the video's caption. If the recipe is only spoken or shown in the video, send the video below instead.
+        </p>
+
+        <div className="flex items-center gap-3 text-sm text-ink-soft" aria-hidden="true">
+          <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
+        </div>
+
+        {video ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 rounded-2xl bg-card p-3 ring-1 ring-line">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pink-soft">
+                <Clapperboard size={20} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">{video.name}</span>
+                <span className="block text-sm text-ink-soft">{(video.size / 1024 / 1024).toFixed(1)} MB</span>
+              </span>
+              <button onClick={() => setVideo(null)} disabled={busy} aria-label="Remove video" className="grid h-8 w-8 place-items-center rounded-full text-ink-soft hover:bg-paper">
+                <X size={16} />
+              </button>
+            </div>
+            <textarea
+              id="video-caption"
+              rows={3}
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              placeholder="Caption (optional): paste the video's description if it lists ingredients"
+              className="field resize-y"
+            />
+            <button className={primaryButton} disabled={busy} onClick={() => run(() => api.importVideo(video, caption), onDraft)}>
+              {busy ? "Watching the video… this can take a minute" : "Read recipe from video"}
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => videoInput.current?.click()} disabled={busy} className={listButton}>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pink-soft text-ink">
+              <Clapperboard size={20} />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-semibold">Choose a saved video</span>
+              <span className="block text-sm text-ink-soft">In TikTok: Share, then Save video. Up to 20 MB.</span>
+            </span>
+          </button>
+        )}
+      </Sheet>
+    );
   }
 
   if (mode === "text") {
@@ -199,6 +376,7 @@ function AddSheet({
             {busy ? "Searching…" : "Search"}
           </button>
         </form>
+        {busy ? <p className="text-sm text-ink-soft">Searching the web and reading the recipes. This can take up to a minute.</p> : null}
         {results && results.length === 0 && <p className="text-sm text-ink-soft">Nothing found. Try different words.</p>}
         <ul className="flex flex-col">
           {(results ?? []).map((draft, index) => (
@@ -222,36 +400,20 @@ function AddSheet({
   }
 
   const ways = [
-    {
-      Icon: Camera,
-      title: busy ? "Reading the image…" : "Screenshot or photo",
-      body: "Read and translated for you",
-      tint: "bg-mustard-soft",
-      onClick: () => fileInput.current?.click(),
-    },
-    { Icon: ClipboardPaste, title: "Paste text", body: "From a message, a caption or a website", tint: "bg-pink-soft", onClick: () => setMode("text") },
+    { Icon: Camera, title: "Screenshots or photos", body: "One or several, read and translated for you", tint: "bg-mustard-soft", onClick: () => imageInput.current?.click() },
+    { Icon: Link2, title: "TikTok or video", body: "Paste a link, or choose a saved video", tint: "bg-pink-soft", onClick: () => setMode("video") },
+    { Icon: ClipboardPaste, title: "Paste text", body: "From a message or a note", tint: "bg-periwinkle-soft", onClick: () => setMode("text") },
     { Icon: Globe, title: "Search the web", body: "Find new ideas to save", tint: "bg-blue-soft", onClick: () => setMode("search") },
     { Icon: PenLine, title: "Type it in", body: "Write it yourself", tint: "bg-green-soft", onClick: () => navigate("/recipes/new") },
   ];
 
   return (
     <Sheet title="Add a recipe" subtitle="You can check and edit it before anything is saved." onClose={onClose}>
+      {hiddenInputs}
       <ErrorNote message={error} />
-      <input
-        ref={fileInput}
-        id="screenshot-file"
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void run(() => api.importImage(file), onDraft);
-          e.target.value = "";
-        }}
-      />
       <ul className="flex flex-col">
         {ways.map(({ Icon, title, body, tint, onClick }) => (
-          <li key={body}>
+          <li key={title}>
             <button onClick={onClick} disabled={busy} className={listButton}>
               <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-ink ${tint}`}>
                 <Icon size={20} />
@@ -267,4 +429,3 @@ function AddSheet({
     </Sheet>
   );
 }
-

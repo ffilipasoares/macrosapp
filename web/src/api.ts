@@ -48,11 +48,19 @@ export const api = {
   createRecipe: (draft: RecipeDraft) => request<Recipe>("/recipes", json("POST", draft)),
   updateRecipe: (id: string, draft: RecipeDraft) => request<Recipe>(`/recipes/${id}`, json("PUT", draft)),
   deleteRecipe: (id: string) => request<void>(`/recipes/${id}`, { method: "DELETE" }),
-  importImage: (file: File) => {
+  /** One recipe from several screenshots, in order. Images are shrunk first to keep uploads fast. */
+  importImages: async (files: File[]) => {
     const form = new FormData();
-    form.append("file", file);
+    for (const file of files) form.append("files", await shrinkImage(file));
     return request<RecipeDraft>("/recipes/import/image", { method: "POST", body: form });
   },
+  importVideo: (file: File, caption = "") => {
+    const form = new FormData();
+    form.append("file", file);
+    if (caption.trim()) form.append("caption", caption.trim());
+    return request<RecipeDraft>("/recipes/import/video", { method: "POST", body: form });
+  },
+  importLink: (url: string) => request<RecipeDraft>("/recipes/import/link", json("POST", { url })),
   importText: (text: string) => request<RecipeDraft>("/recipes/import/text", json("POST", { text })),
   searchRecipes: (query: string) => request<RecipeDraft[]>("/recipes/search", json("POST", { query, count: 4 })),
 
@@ -68,3 +76,20 @@ export const api = {
   addGroceries: (text: string) => request<GroceryItem[]>("/groceries", json("POST", { text })),
   registerDevice: (token: string) => request<void>("/devices", json("POST", { token })),
 };
+
+/** Scale a photo down to at most 2000 px on its longest side, as JPEG. Falls back to the original. */
+async function shrinkImage(file: File): Promise<Blob | File> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size < 1_500_000) return file;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  } catch {
+    return file;
+  }
+}

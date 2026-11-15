@@ -18,7 +18,7 @@ Google Cloud.
 | Cook once, eat twice | Lets you set portions per meal (Thursday dinner for 3 covers Friday lunch) and scales recipes to match |
 | Stop writing grocery lists | Merges all ingredients of the approved plan into one list, grouped by aisle, minus what you always have |
 | Add things during the week | Type them in, or say "Hey Siri, add to groceries" |
-| Save a recipe you saw | Reads it from a screenshot or pasted text, translates it to English, and lets you check it before saving |
+| Save a recipe you saw | Reads it from one or several screenshots, a TikTok or recipe link, a saved cooking video, or pasted text; translates it to English; lets you check it before saving |
 | Find new ideas | Searches the web for recipes ("healthy dinner with lentils") you can save in one tap |
 
 ## The screens
@@ -148,6 +148,6 @@ Firebase project:
 
 Not built yet:
 - Storing the original screenshot alongside an imported recipe.
-- Importing from a link (TikTok and most recipe sites block automated reading;
-  use a screenshot or paste the text).
+- Importing Instagram links (Instagram needs an account to read posts; send the
+  saved video or a screenshot instead).
 - Usage limits on AI calls.

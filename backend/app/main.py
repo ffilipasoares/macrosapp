@@ -55,14 +55,21 @@ def create_app(
     notifier: Notifier | None = None,
     verify_token: Callable[[str], dict] | None = None,
     use_default_ai: bool = True,
+    read_link: Callable[[str], object] | None = None,
 ) -> FastAPI:
     config = config or Config()
-    app = FastAPI(title="Meal Planner API", version="0.1.0")
+    # The interactive API pages are switched off: there is no need to advertise the API.
+    app = FastAPI(title="Meal Planner API", version="0.1.0", docs_url=None, redoc_url=None)
 
     app.state.config = config
     app.state.repo = repo or _default_repo(config)
     app.state.ai = ai if ai is not None or not use_default_ai else _default_ai(config)
     app.state.verify_token = verify_token or _default_verify_token(config)
+    if read_link is None:
+        from app.links import read_link as default_read_link
+
+        read_link = default_read_link
+    app.state.read_link = read_link
     if notifier is None:
         if config.push_enabled:
             _init_firebase(config)

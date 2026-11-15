@@ -27,20 +27,35 @@ groceries", or tells you it is already on the list.
 
 ## "Save recipe" (share sheet)
 
-Create a shortcut named **Save recipe**:
+One shortcut handles screenshots, saved videos and links. Create a shortcut named
+**Save recipe**:
 
-1. In the shortcut's details, turn on **Show in Share Sheet** and limit the
-   accepted types to **Images**.
-2. **Get Contents of URL**
-   - URL: the *Save a recipe screenshot* address from Settings
-   - Method: **POST**
-   - Headers: `Authorization` = `Bearer YOUR_KEY`
-   - Request Body: **Form**, with one field `file` of type *File* set to *Shortcut Input*
+1. In the shortcut's details, turn on **Show in Share Sheet** and accept **Images**,
+   **Media** and **URLs**.
+2. **If** *Shortcut Input* **has any value** of type... use three branches with
+   **Get Type**, or create three small shortcuts instead if that is easier:
+   - **Screenshots** (one or several): **Get Contents of URL** to the
+     *Save a recipe screenshot* address, Method **POST**, header
+     `Authorization` = `Bearer YOUR_KEY`, Request Body **Form**, with a field
+     `files` of type *File* set to *Shortcut Input*. Several selected screenshots
+     are sent together and read as one recipe, in the order you picked them.
+   - **A saved video**: the same, but to the address ending in
+     `/api/shortcuts/recipe-video`, with a field `file` set to *Shortcut Input*.
+   - **A link** (TikTok's **Share → Copy link**, or Safari): the same, but to the
+     address ending in `/api/shortcuts/recipe-link`, with Request Body **JSON** and
+     a field `url` (Text) set to *Shortcut Input*.
 3. **Get Dictionary Value** – `message`
 4. **Show Notification** – *Dictionary Value*
 
-Take a screenshot of a recipe (in TikTok, Instagram, anywhere), tap Share →
-**Save recipe**. The recipe appears in the app marked "check this" so you can
-confirm the amounts.
+The recipe appears in the app marked "check this" so you can confirm the amounts.
 
-Images up to 8 MB in JPEG, PNG, WebP or HEIC are accepted.
+### Which one to use for TikTok
+
+- **Link**: fastest. It reads the video's caption through TikTok's official embed
+  service. Works when the caption lists the ingredients.
+- **Video**: in TikTok, **Share → Save video**, then share it from Photos. The AI
+  watches the video and listens to it, so it also finds recipes that are only
+  spoken or shown on screen. Takes up to a minute.
+
+Limits: up to 10 images for one recipe, 20 MB in total; videos up to 20 MB
+(a typical 1-minute TikTok is well under that).
