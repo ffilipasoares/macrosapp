@@ -55,7 +55,7 @@ PAGES = {
     ),
     "https://good.example/listicle": LinkContent(
         "https://good.example/listicle",
-        "25 fish dinners " * 20,
+        "25 fish dinners, no recipe here",
         "page",
         "https://img.example/l.jpg",
     ),
@@ -80,7 +80,7 @@ def reader(url: str) -> LinkContent:
     return PAGES[url]
 
 
-def test_only_working_pages_with_a_photo_are_kept():
+def test_only_working_pages_with_a_recipe_are_kept():
     ai = ListedLinks(
         [
             "https://broken.example/404",
@@ -93,17 +93,25 @@ def test_only_working_pages_with_a_photo_are_kept():
             "https://good.example/fish-3",
         ]
     )
-    found = find_web_recipes(ai, reader, "healthy fish dinner", 2, ["Salmon bowl"])
-    assert [draft.title for draft in found] == ["Fish tacos", "Fish pie"]
+    found = find_web_recipes(ai, reader, "healthy fish dinner", 3, ["Salmon bowl"])
+    # Broken page, list page, a recipe you already have and a duplicate are skipped.
+    assert [draft.title for draft in found] == ["Fish soup", "Fish tacos", "Fish pie"]
     assert [draft.source_url for draft in found] == [
+        "https://good.example/no-photo",
         "https://good.example/fish-1",
         "https://good.example/fish-2",
     ]
-    assert all(draft.image_url and draft.ingredients for draft in found)
+    assert all(draft.ingredients for draft in found)
+    # A page without a photo is kept; the others bring theirs.
+    assert [draft.image_url for draft in found] == [
+        None,
+        "https://img.example/1.jpg",
+        "https://img.example/2.jpg",
+    ]
 
 
 def test_no_working_pages_means_no_suggestions():
-    ai = ListedLinks(["https://broken.example/1", "https://good.example/no-photo"])
+    ai = ListedLinks(["https://broken.example/1", "https://good.example/listicle"])
     assert find_web_recipes(ai, reader, "dinner", 3, []) == []
 
 

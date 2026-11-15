@@ -85,8 +85,8 @@ firestore.rules  Who may read what directly from the phone.
   library cannot fill the week.
 - **New recipes from the web are checked before they appear.** The search only
   proposes pages Google really returned; each page is opened and kept only if it
-  loads, describes a single recipe and has a photo. The recipe is built from that
-  page, and its photo is copied into your Storage when it is saved.
+  loads and has a recipe with ingredients on it. The recipe is built from that
+  page; its photo, when it has one, is copied into your Storage when it is saved.
 - **Everything belongs to a household**, so a second household later is a new
   record, not a redesign.
 - **The web app talks to the API for everything except the grocery list**,

@@ -1,8 +1,9 @@
 """Find new recipes on the web, keeping only ones whose page really works.
 
 The web search only proposes addresses. Each page is then opened and kept only if
-it loads, describes a single recipe in structured recipe data, and has a photo.
-The recipe is built from that page, so its link is the page that was really read.
+it loads and the AI finds a recipe with ingredients on it. The recipe is built
+from that page, so its link is the page that was really read. The page's photo is
+used when it has one.
 """
 
 import logging
@@ -30,15 +31,13 @@ def _check(ai: RecipeAI, read_link: Callable[[str], LinkContent], url: str) -> R
     except Exception:
         log.warning("Skipped %s: unexpected error", url, exc_info=True)
         return None
-    if content.kind not in ("recipe-data", "tiktok") or not content.image_url:
-        log.info("Skipped %s: not a single recipe with a photo", url)
-        return None
     try:
         draft = ai.recipe_from_text(content.text, source_url=content.url)
     except AIError as error:
         log.info("Skipped %s: %s", url, error)
         return None
     if not draft.ingredients:
+        log.info("Skipped %s: no ingredients found on the page", url)
         return None
     draft.source_url = content.url
     draft.image_url = content.image_url
