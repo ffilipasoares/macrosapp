@@ -1,5 +1,5 @@
 // Service worker: push notifications and opening the app with no signal.
-const CACHE = "mealplan-v1";
+const CACHE = "mealplan-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {
