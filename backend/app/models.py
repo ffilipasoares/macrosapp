@@ -259,8 +259,12 @@ class PlanOut(WeekPlan):
 
 
 class Alternative(BaseModel):
+    """A recipe that could go in a meal. Every recipe can be chosen; the flags only inform."""
+
     recipe: Recipe
     keeps_rules: bool
+    already_planned: bool = False
+    fits_diets: bool = True
 
 
 class GroceryItem(BaseModel):

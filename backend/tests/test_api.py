@@ -182,8 +182,12 @@ def test_swapping_a_meal_checks_the_rules_and_reopens_the_plan(ctx):
     fish_slots = [s for s, meal in plan["meals"].items() if meal["recipe"]["protein"] == "fish"]
     slot = fish_slots[0]
     options = client.get(f"/api/plans/{WEEK}/meals/{slot}/alternatives", headers=auth()).json()
-    planned_ids = {meal["recipe"]["id"] for meal in plan["meals"].values()}
-    assert options and all(option["recipe"]["id"] not in planned_ids for option in options)
+    current = plan["meals"][slot]["recipe"]["id"]
+    elsewhere = {m["recipe"]["id"] for s, m in plan["meals"].items() if s != slot}
+    # The whole library is offered, apart from what is already in this meal.
+    assert len(options) == len(client.get("/api/recipes", headers=auth()).json()) - 1
+    assert current not in {option["recipe"]["id"] for option in options}
+    assert {o["recipe"]["id"] for o in options if o["already_planned"]} == elsewhere
     if len(fish_slots) == 2:
         assert all(
             option["recipe"]["protein"] == "fish" for option in options if option["keeps_rules"]

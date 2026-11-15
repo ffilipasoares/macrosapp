@@ -396,6 +396,16 @@ export interface components {
     schemas: {
         /** Alternative */
         Alternative: {
+            /**
+             * Already Planned
+             * @default false
+             */
+            already_planned?: boolean;
+            /**
+             * Fits Diets
+             * @default true
+             */
+            fits_diets?: boolean;
             recipe: components["schemas"]["Recipe"];
             /** Keeps Rules */
             keeps_rules: boolean;

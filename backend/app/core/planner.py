@@ -124,9 +124,14 @@ def alternatives(
     recent_ids: set[str],
     max_repeat_ratio: float,
 ) -> list[Alternative]:
-    """Recipes that could replace the meal in ``slot``, rule-keeping ones first."""
+    """Every recipe that could replace the meal in ``slot``, rule-keeping ones first.
+
+    Nothing is left out except the recipe already in this slot: recipes planned on
+    other days are included and flagged, since choosing a meal is always free.
+    """
     others = [recipe for key, recipe in planned_by_slot.items() if key != slot]
-    used_ids = {recipe.id for recipe in planned_by_slot.values()}
+    current = planned_by_slot.get(slot)
+    other_ids = {recipe.id for recipe in others}
 
     def failures(planned: list[Recipe]) -> int:
         statuses = rule_status(planned, slot_count, rules, recent_ids, max_repeat_ratio)
@@ -135,13 +140,18 @@ def alternatives(
     # A swap "keeps the rules" if it leaves no more rules broken than removing the meal would.
     baseline = min(failures(list(planned_by_slot.values())), failures(others))
     options = [
-        Alternative(recipe=recipe, keeps_rules=failures([*others, recipe]) <= baseline)
+        Alternative(
+            recipe=recipe,
+            keeps_rules=failures([*others, recipe]) <= baseline,
+            already_planned=recipe.id in other_ids,
+        )
         for recipe in recipes
-        if recipe.id not in used_ids
+        if current is None or recipe.id != current.id
     ]
     options.sort(
         key=lambda option: (
             not option.keeps_rules,
+            option.already_planned,
             option.recipe.id in recent_ids,
             option.recipe.last_planned_week or "",
             option.recipe.title.lower(),

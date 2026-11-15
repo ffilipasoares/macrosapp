@@ -1,5 +1,5 @@
 import { motion, useDragControls, type PanInfo } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Plus, RefreshCw, Shuffle, ShoppingBasket } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Plus, RefreshCw, Search, Shuffle, ShoppingBasket } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
@@ -24,7 +24,7 @@ import { DAY_COLORS, ease, lastCookedLabel, proteinStyle } from "../lib/style";
 import { DAYS, MEALS, addWeeks, defaultWeekId, formatQuantity, isWeekId, weekLabel, weekRange } from "../lib/weeks";
 import { MacrosCard } from "../components/MacrosCard";
 import { perPortion } from "../lib/macros";
-import type { Alternative, Plan, PlanMeal, ReferencePortion, Rule, Settings } from "../types";
+import { CATEGORIES, type Alternative, type Plan, type PlanMeal, type ReferencePortion, type Rule, type Settings } from "../types";
 
 export function PlanPage() {
   const { weekId } = useParams();
@@ -530,6 +530,7 @@ function MealScreen({
   onClose: () => void;
 }) {
   const [choosing, setChoosing] = useState(meal === null);
+  const [search, setSearch] = useState("");
   const [options, setOptions] = useState<Alternative[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -553,8 +554,13 @@ function MealScreen({
   }
 
   if (choosing) {
-    const keeps = (options ?? []).filter((o) => o.keeps_rules);
-    const breaks = (options ?? []).filter((o) => !o.keeps_rules);
+    // The whole library can be chosen. Suggestions come first; the rest carry labels.
+    const q = search.trim().toLowerCase();
+    const matching = (options ?? []).filter(
+      (o) => !q || o.recipe.title.toLowerCase().includes(q) || (o.recipe.ingredients ?? []).some((i) => i.name.includes(q)),
+    );
+    const suggested = matching.filter(isSuggested);
+    const rest = matching.filter((o) => !isSuggested(o));
     return (
       <Overlay>
         <div className="mx-auto flex max-w-2xl flex-col gap-6 px-5 pb-10 pt-[calc(1.25rem+env(safe-area-inset-top))]">
@@ -567,15 +573,39 @@ function MealScreen({
             <Loading label="Finding options" />
           ) : options.length === 0 ? (
             <p className="text-ink-soft">
-              Every recipe in your library is already in this week.{" "}
+              Your library has no other recipes yet.{" "}
               <Link to="/recipes" className="font-semibold text-blue underline-offset-4 hover:underline">
                 Add more recipes
               </Link>
             </p>
           ) : (
             <>
-              {keeps.length ? <OptionList title="Keeps your rules" tone="text-green" options={keeps} today={today} disabled={saving} onPick={(id) => change(id)} /> : null}
-              {breaks.length ? <OptionList title="Breaks a rule" tone="text-ink-soft" options={breaks} today={today} disabled={saving} onPick={(id) => change(id)} /> : null}
+              <label className="flex items-center gap-2 rounded-full bg-card px-4 py-2.5 ring-1 ring-line focus-within:ring-ink-soft">
+                <Search size={18} className="shrink-0 text-ink-soft" />
+                <input
+                  id="choose-search"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={`Search all ${options.length} recipes`}
+                  aria-label="Search your recipes"
+                  className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-soft/80"
+                />
+              </label>
+              {suggested.length ? (
+                <OptionList title="Suggested" tone="text-green" options={suggested} today={today} disabled={saving} onPick={(id) => change(id)} />
+              ) : null}
+              {rest.length ? (
+                <OptionList
+                  title={suggested.length ? "Everything else in your library" : "Your library"}
+                  tone="text-ink-soft"
+                  options={rest}
+                  today={today}
+                  disabled={saving}
+                  onPick={(id) => change(id)}
+                />
+              ) : null}
+              {!suggested.length && !rest.length ? <p className="text-ink-soft">No recipes match “{search}”.</p> : null}
             </>
           )}
         </div>
@@ -669,6 +699,23 @@ function MealScreen({
   );
 }
 
+function isSuggested(option: Alternative): boolean {
+  return (
+    (option.recipe.category ?? "main") === "main" && option.fits_diets !== false && !option.already_planned && option.keeps_rules
+  );
+}
+
+/** Why a recipe is not a suggestion. It can still be chosen. */
+function optionNotes(option: Alternative): string[] {
+  const notes: string[] = [];
+  const category = option.recipe.category ?? "main";
+  if (category !== "main") notes.push(CATEGORIES.find((c) => c.key === category)?.label ?? category);
+  if (option.already_planned) notes.push("Already this week");
+  if (option.fits_diets === false) notes.push("Outside your diets");
+  if (!option.keeps_rules) notes.push("Breaks a rule");
+  return notes;
+}
+
 function OptionList({
   title,
   tone,
@@ -688,7 +735,10 @@ function OptionList({
     <section>
       <h2 className={`text-sm font-semibold ${tone}`}>{title}</h2>
       <ul className="mt-1">
-        {options.map(({ recipe }) => (
+        {options.map((option) => {
+          const recipe = option.recipe;
+          const notes = optionNotes(option);
+          return (
           <li key={recipe.id}>
             <button onClick={() => onPick(recipe.id!)} disabled={disabled} className={listButton}>
               <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} />
@@ -699,10 +749,20 @@ function OptionList({
                   {recipe.prep_minutes ? <span>· {recipe.prep_minutes} min</span> : null}
                   <span>· {lastCookedLabel(recipe.last_planned_week, today)}</span>
                 </span>
+                {notes.length ? (
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {notes.map((note) => (
+                      <span key={note} className="rounded-full bg-mustard-soft px-2 py-0.5 text-[11px] font-semibold text-ink">
+                        {note}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
               </span>
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </section>
   );

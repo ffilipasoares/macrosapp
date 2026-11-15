@@ -119,7 +119,15 @@ def test_a_vegetarian_diet_keeps_meat_out_of_the_plan_and_the_swaps():
     plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
     assert {meal["recipe"]["protein"] for meal in plan["meals"].values()} <= {"vegetarian", "egg"}
     options = client.get(f"/api/plans/{WEEK}/meals/mon_dinner/alternatives", headers=AUTH).json()
-    assert all(option["recipe"]["protein"] != "beef" for option in options)
+    # Steak can still be chosen by hand: it is offered, flagged and listed last.
+    beef = [o for o in options if o["recipe"]["protein"] == "beef"]
+    assert beef and all(not o["fits_diets"] for o in beef)
+    assert options.index(beef[0]) > max(i for i, o in enumerate(options) if o["fits_diets"])
+    # The quick swap, which picks for you, never picks it.
+    for _ in range(5):
+        swapped = client.post(f"/api/plans/{WEEK}/meals/mon_dinner/swap", headers=AUTH)
+        if swapped.status_code == 200:
+            assert swapped.json()["meals"]["mon_dinner"]["recipe"]["protein"] != "beef"
 
 
 def test_web_ideas_follow_the_diet_and_vary_the_protein():
@@ -362,3 +370,21 @@ def test_dragging_onto_an_empty_meal_moves_it_there():
         ).status_code
         == 404
     )
+
+
+def test_any_recipe_can_be_chosen_by_hand_even_one_already_in_the_week():
+    client = make()
+    set_settings(
+        client, diets=["vegetarian"], rules=[{"kind": "min", "count": 1, "tag": "vegetarian"}]
+    )
+    stew = add(client, "Bean stew", "vegetarian")
+    steak = add(client, "Steak", "beef")
+    plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
+    assert plan["meals"]["mon_dinner"]["recipe"]["id"] == stew
+    # The same stew again on Tuesday, and steak on Wednesday, despite the diet and the rule.
+    client.put(f"/api/plans/{WEEK}/meals/tue_dinner", json={"recipe_id": stew}, headers=AUTH)
+    chosen = client.put(
+        f"/api/plans/{WEEK}/meals/mon_dinner", json={"recipe_id": steak}, headers=AUTH
+    ).json()
+    assert chosen["meals"]["mon_dinner"]["recipe"]["title"] == "Steak"
+    assert chosen["meals"]["tue_dinner"]["recipe"]["title"] == "Bean stew"

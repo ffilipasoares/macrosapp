@@ -431,19 +431,29 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     plan = repo.get_plan(household_id, week_id) or WeekPlan(week_id=week_id)
     planned = {key: meal.recipe for key, meal in plan.meals.items()}
     slot_count = max(len(settings.cook_slots()), len(planned))
-    return planner.alternatives(
+    options = planner.alternatives(
         planned,
         slot,
-        [
-            r
-            for r in repo.list_recipes(household_id)
-            if r.category == "main" and fits(settings.diets, r)
-        ],
+        repo.list_recipes(household_id),  # the whole library: choosing a meal is always free
         slot_count,
         settings.rules,
         recent_recipe_ids(repo, household_id, week_id, settings),
         settings.max_repeat_ratio,
     )
+    for option in options:
+        option.fits_diets = fits(settings.diets, option.recipe)
+    # Best suggestions first; everything else follows, flagged but still selectable:
+    # main dishes before other types, then fitting the diets, then not already this
+    # week, then keeping the rules (the order within each step stays as ranked).
+    options.sort(
+        key=lambda option: (
+            option.recipe.category != "main",
+            not option.fits_diets,
+            option.already_planned,
+            not option.keeps_rules,
+        )
+    )
+    return options
 
 
 def move_meal(
@@ -480,8 +490,16 @@ def move_meal(
 def swap_meal(
     repo: Repo, household_id: str, week_id: str, slot: str, rng: random.Random
 ) -> WeekPlan:
-    """One-tap swap: another library recipe that keeps the rules, chosen among the best few."""
-    options = meal_alternatives(repo, household_id, week_id, slot)
+    """One-tap swap: the app picks for you, so it picks sensibly.
+
+    A main dish that fits the diets and is not already planned this week, keeping the
+    rules if possible, chosen among the best few. To choose freely, pick from the list.
+    """
+    options = [
+        option
+        for option in meal_alternatives(repo, household_id, week_id, slot)
+        if option.recipe.category == "main" and option.fits_diets and not option.already_planned
+    ]
     if not options:
         raise NotFound("No other recipe in your library fits this meal. Add more recipes.")
     keeping = [option for option in options if option.keeps_rules] or options

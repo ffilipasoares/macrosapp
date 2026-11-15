@@ -64,7 +64,14 @@ def test_desserts_are_never_planned_or_offered_as_a_swap():
     assert planned and all(title.startswith("Bean stew") for title in planned)
     slot = next(iter(plan["meals"]))
     options = client.get(f"/api/plans/{WEEK}/meals/{slot}/alternatives", headers=AUTH).json()
-    assert all(option["recipe"]["category"] == "main" for option in options)
+    # Desserts can still be chosen by hand; they are listed after the main dishes.
+    categories = [option["recipe"]["category"] for option in options]
+    assert "dessert" in categories and "breakfast" in categories
+    assert categories.index("dessert") > max(i for i, c in enumerate(categories) if c == "main")
+    for _ in range(5):
+        swapped = client.post(f"/api/plans/{WEEK}/meals/{slot}/swap", headers=AUTH)
+        if swapped.status_code == 200:
+            assert swapped.json()["meals"][slot]["recipe"]["category"] == "main"
 
 
 def test_desserts_found_on_the_web_are_not_planned():

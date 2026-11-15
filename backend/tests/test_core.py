@@ -108,7 +108,12 @@ def test_alternatives_put_rule_keeping_swaps_first():
     }
     options = planner.alternatives(planned, "wed_dinner", recipes, 4, RULES, set(), 0.2)
 
-    assert all(option.recipe.id not in {r.id for r in planned.values()} for option in options)
+    # Everything is offered except the recipe already in this slot; meals planned on
+    # other days are included and flagged.
+    assert "fish-6" not in {option.recipe.id for option in options}
+    assert len(options) == len(recipes) - 1
+    flagged = {option.recipe.id for option in options if option.already_planned}
+    assert flagged == {"chicken-0", "chicken-1", "fish-7"}
     keeping = [option for option in options if option.keeps_rules]
     assert keeping and all(option.recipe.protein == "fish" for option in keeping)
     assert options[: len(keeping)] == keeping
