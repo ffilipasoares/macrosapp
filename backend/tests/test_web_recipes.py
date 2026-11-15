@@ -274,3 +274,52 @@ def test_search_uses_the_pages_google_returned_not_the_written_answer():
         "https://vertexaisearch.cloud.google.com/grounding-api-redirect/a",
         "https://vertexaisearch.cloud.google.com/grounding-api-redirect/b",
     ]
+
+
+def test_the_web_search_stops_when_time_is_up():
+    import time
+
+    ai = ListedLinks(["https://good.example/fish-1", "https://good.example/fish-2"])
+    assert find_web_recipes(ai, reader, "fish", 2, [], deadline=time.monotonic() - 1) == []
+    assert len(find_web_recipes(ai, reader, "fish", 2, [], deadline=time.monotonic() + 30)) == 2
+
+
+def test_plan_says_when_the_search_ran_out_of_time(monkeypatch):
+    from app import services
+
+    monkeypatch.setattr(services, "WEB_SEARCH_SECONDS", -1)
+    app = create_app(
+        config=Config(push_enabled=False),
+        repo=MemoryRepo(),
+        ai=ListedLinks(["https://good.example/fish-1"]),
+        notifier=LogNotifier(),
+        verify_token=lambda token: {"uid": token, "email": "a@example.com", "email_verified": True},
+        read_link=reader,
+    )
+    plan = (
+        TestClient(app)
+        .post("/api/plans/2026-11-16/generate", headers={"Authorization": "Bearer ana"})
+        .json()
+    )
+    assert any("after -1 seconds" in note for note in plan["notes"])
+
+
+def test_unexpected_errors_explain_themselves():
+    def broken(url: str) -> LinkContent:
+        raise RuntimeError("boom")
+
+    app = create_app(
+        config=Config(push_enabled=False),
+        repo=MemoryRepo(),
+        ai=FakeRecipeAI(),
+        notifier=LogNotifier(),
+        verify_token=lambda token: {"uid": token, "email": "a@example.com", "email_verified": True},
+        read_link=broken,
+    )
+    reply = TestClient(app, raise_server_exceptions=False).post(
+        "/api/recipes/import/link",
+        json={"url": "https://x.example/r"},
+        headers={"Authorization": "Bearer ana"},
+    )
+    assert reply.status_code == 500
+    assert "unexpected problem (RuntimeError)" in reply.json()["detail"]

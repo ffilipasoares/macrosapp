@@ -3,7 +3,8 @@
 import logging
 from collections.abc import Callable
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.ai.base import RecipeAI
 from app.api import household, integrations, plans, recipes
@@ -95,6 +96,20 @@ def create_app(
 
     for router in (recipes.router, plans.router, household.router, integrations.router):
         app.include_router(router, prefix="/api")
+
+    @app.exception_handler(Exception)
+    async def unexpected_error(request: Request, error: Exception) -> JSONResponse:
+        # The full details go to the logs; the app gets a short reason it can show.
+        logging.getLogger("app").exception(
+            "Unexpected error on %s %s", request.method, request.url.path
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"The server hit an unexpected problem ({type(error).__name__}). "
+                "The details are in the server logs."
+            },
+        )
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

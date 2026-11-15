@@ -6,6 +6,7 @@ The recipe is built from that page, so its link is the page that was really read
 """
 
 import logging
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,7 +16,9 @@ from app.models import RecipeDraft
 
 log = logging.getLogger(__name__)
 
-PARALLEL_CHECKS = 4
+# Pages are checked several at a time, so a plan can be ready within the minute that
+# Firebase Hosting waits for an answer.
+PARALLEL_CHECKS = 8
 
 
 def _check(ai: RecipeAI, read_link: Callable[[str], LinkContent], url: str) -> RecipeDraft | None:
@@ -48,8 +51,15 @@ def find_web_recipes(
     query: str,
     count: int,
     avoid_titles: list[str],
+    deadline: float | None = None,
 ) -> list[RecipeDraft]:
-    """Up to ``count`` new recipes for ``query``, each from a page that was checked."""
+    """Up to ``count`` new recipes for ``query``, each from a page that was checked.
+
+    No new search or batch of checks starts after ``deadline`` (a ``time.monotonic()``
+    value), so the caller gets whatever was found in time.
+    """
+    if deadline is not None and time.monotonic() >= deadline:
+        return []
     urls = ai.find_recipe_links(query, count, avoid_titles)
     avoid = {title.strip().lower() for title in avoid_titles}
     found: list[RecipeDraft] = []
@@ -58,8 +68,11 @@ def find_web_recipes(
     with ThreadPoolExecutor(max_workers=PARALLEL_CHECKS) as pool:
         position = 0
         while position < len(urls) and len(found) < count:
+            if deadline is not None and time.monotonic() >= deadline:
+                log.info("Stopped checking pages for %r: out of time", query)
+                break
             # Check a few more pages than still needed, since some will not work.
-            batch = urls[position : position + max(PARALLEL_CHECKS, count - len(found) + 1)]
+            batch = urls[position : position + max(PARALLEL_CHECKS, count - len(found) + 2)]
             position += len(batch)
             for draft in pool.map(lambda url: _check(ai, read_link, url), batch):
                 if draft is None or len(found) >= count:

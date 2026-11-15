@@ -3,6 +3,7 @@
 import logging
 import random
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -34,6 +35,9 @@ log = logging.getLogger(__name__)
 
 class NotFound(Exception):
     pass
+
+
+WEB_SEARCH_SECONDS = 30
 
 
 @dataclass
@@ -86,6 +90,7 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
 def _fill_with_suggestions(
     ai: RecipeAI,
     web: Web,
+    deadline: float,
     picks: list[Recipe],
     slot_count: int,
     settings: Settings,
@@ -108,7 +113,7 @@ def _fill_with_suggestions(
         )
 
     def suggest(query: str, amount: int) -> list[Recipe]:
-        drafts = find_web_recipes(ai, web.read_link, query, amount, titles)
+        drafts = find_web_recipes(ai, web.read_link, query, amount, titles, deadline)
         recipes = [Recipe(**draft.model_dump()) for draft in drafts]
         titles.extend(recipe.title for recipe in recipes)
         return recipes
@@ -164,6 +169,8 @@ def generate_plan(
     )
     notes: list[str] = []
     new_ids: set[str] = set()
+    # Firebase Hosting gives up on a request after 60 seconds, so the web search gets 30.
+    deadline = time.monotonic() + WEB_SEARCH_SECONDS
 
     statuses = planner.rule_status(
         picks, len(slots), settings.rules, recent, settings.max_repeat_ratio
@@ -171,11 +178,22 @@ def generate_plan(
     if ai is not None and (len(picks) < len(slots) or not all(s.ok for s in statuses)):
         try:
             picks, new_ids = _fill_with_suggestions(
-                ai, web or Web(), picks, len(slots), settings, [recipe.title for recipe in recipes]
+                ai,
+                web or Web(),
+                deadline,
+                picks,
+                len(slots),
+                settings,
+                [recipe.title for recipe in recipes],
             )
         except AIError as error:
             notes.append(f"Could not look for new recipes: {error}")
 
+    if ai is not None and len(picks) < len(slots) and time.monotonic() >= deadline:
+        notes.append(
+            f"Stopped looking for new recipes on the web after {WEB_SEARCH_SECONDS} seconds. "
+            "Generate again to look for more."
+        )
     if len(picks) < len(slots):
         notes.append(
             f"Only {len(picks)} of {len(slots)} meals could be filled without breaking your "

@@ -33,7 +33,13 @@ async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFA
     clearTimeout(timer);
   }
   if (!response.ok) {
-    let message = "Something went wrong. Try again.";
+    // Say what kind of failure it was, so it can be looked up in the server logs.
+    let message =
+      response.status === 504 || response.status === 408
+        ? "The server took more than a minute to answer and the request was stopped (error 504). Try again."
+        : response.status === 502 || response.status === 503
+          ? `The server is not reachable right now (error ${response.status}). Try again in a minute.`
+          : `Something went wrong (error ${response.status}). Try again.`;
     try {
       const body = await response.json();
       if (typeof body.detail === "string") message = body.detail;
