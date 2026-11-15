@@ -440,6 +440,37 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     )
 
 
+def move_meal(
+    repo: Repo, household_id: str, week_id: str, from_slot: str, to_slot: str
+) -> WeekPlan:
+    """Drag and drop: swap the meals of two slots, or move a meal to an empty one.
+
+    Recipes trade places but each slot keeps its own portions, since portions are
+    about who eats that meal (a dinner that also covers tomorrow's lunch is bigger).
+    """
+    for slot in (from_slot, to_slot):
+        if slot not in SLOT_KEYS:
+            raise NotFound(f"Unknown meal slot: {slot}")
+    plan = repo.get_plan(household_id, week_id)
+    if plan is None or from_slot not in plan.meals:
+        raise NotFound("There is no meal to move there")
+    if from_slot == to_slot:
+        return plan
+    settings = repo.get_settings(household_id)
+    moving = plan.meals.pop(from_slot)
+    other = plan.meals.pop(to_slot, None)
+    target_portions = other.portions if other else settings.slots[to_slot].portions
+    plan.meals[to_slot] = moving.model_copy(update={"portions": target_portions})
+    if other is not None:
+        plan.meals[from_slot] = other.model_copy(update={"portions": moving.portions})
+    plan.meals = {slot: plan.meals[slot] for slot in SLOT_KEYS if slot in plan.meals}
+    # The grocery list no longer matches, so approval is needed again.
+    plan.status = "draft"
+    plan.approved_at = None
+    repo.save_plan(household_id, plan)
+    return plan
+
+
 def swap_meal(
     repo: Repo, household_id: str, week_id: str, slot: str, rng: random.Random
 ) -> WeekPlan:

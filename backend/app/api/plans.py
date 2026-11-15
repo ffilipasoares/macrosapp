@@ -70,6 +70,22 @@ def apply_diets(
     return services.plan_out(repo, household.id, plan)
 
 
+class MealMove(BaseModel):
+    to_slot: str
+
+
+@router.post("/{week_id}/meals/{slot}/move")
+def move(
+    week_id: str, slot: str, body: MealMove, household: CurrentHousehold, repo: RepoDep
+) -> PlanOut:
+    """Drag and drop a meal onto another day: the two swap, each day keeping its portions."""
+    try:
+        plan = services.move_meal(repo, household.id, _week(week_id), slot, body.to_slot)
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+    return services.plan_out(repo, household.id, plan)
+
+
 @router.post("/{week_id}/meals/{slot}/swap")
 def swap(week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep) -> PlanOut:
     """Swap a meal in one tap for another recipe that keeps the rules."""

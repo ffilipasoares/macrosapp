@@ -20,6 +20,7 @@ Google Cloud.
 | Add things during the week | Type them in, or say "Hey Siri, add to groceries" |
 | Save a recipe you saw | Reads it from one or several screenshots, a TikTok or recipe link, a saved cooking video, or pasted text; translates it to English; lets you check it before saving |
 | Eat the way you want | Choose one or more diets in Settings (Mediterranean, high protein, low carb, pescatarian, vegetarian, vegan, or your own). Plans and web ideas follow all of them; your own recipes are checked once against each diet. "Update this week" applies a change to an existing plan, keeping the meals that already fit |
+| Move meals between days | Drag a meal by its grip onto another day to swap them, or onto an empty day to move it; each day keeps its portions |
 | Change a meal fast | A swap button on each meal in the week replaces it in one tap with another recipe that keeps your rules |
 | Know what you eat | Shows calories, protein, carbs and fat per portion for every recipe and planned meal; you choose in Settings whether a portion is one serving or a fixed weight (e.g. 400 g) |
 | Keep recipes recognisable | Add a photo to any recipe; recipes from websites bring their own photo |

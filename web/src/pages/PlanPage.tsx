@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Plus, RefreshCw, Shuffle, ShoppingBasket } from "lucide-react";
+import { motion, useDragControls, type PanInfo } from "framer-motion";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, GripVertical, Plus, RefreshCw, Shuffle, ShoppingBasket } from "lucide-react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
@@ -61,6 +62,22 @@ export function PlanPage() {
   const [swapping, setSwapping] = useState<string | null>(null);
 
   /** One-tap swap from the week view, without opening the meal. */
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+  /** Drag and drop between days. */
+  async function moveMeal(from: string, to: string) {
+    setSwapping(from);
+    setError(null);
+    try {
+      setPlan(await api.moveMeal(weekId!, from, to));
+      setListCount(null);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setSwapping(null);
+    }
+  }
+
   async function quickSwap(slot: string) {
     setSwapping(slot);
     setError(null);
@@ -208,18 +225,43 @@ export function PlanPage() {
                         <div className={`text-2xl font-extrabold leading-tight ${DAY_COLORS[dayIndex % DAY_COLORS.length]}`}>{dayNumber(weekId, dayIndex)}</div>
                       </div>
                       <div className="flex min-w-0 flex-col gap-1">
-                        {slots.map((slot) => (
-                          <MealRow
-                            key={slot.key}
-                            name={slot.name}
-                            meal={meals[slot.key]}
-                            reference={settings?.reference_portion}
-                            onOpen={() => setOpenSlot(slot.key)}
-                            onSwap={() => quickSwap(slot.key)}
-                            swapping={swapping === slot.key}
-                            swapDisabled={swapping !== null || busy !== null}
-                          />
-                        ))}
+                        {slots.map((slot) => {
+                          const meal = meals[slot.key];
+                          const row = (
+                            <MealRow
+                              name={slot.name}
+                              meal={meal}
+                              reference={settings?.reference_portion}
+                              onOpen={() => setOpenSlot(slot.key)}
+                              onSwap={() => quickSwap(slot.key)}
+                              swapping={swapping === slot.key}
+                              swapDisabled={swapping !== null || busy !== null}
+                            />
+                          );
+                          return (
+                            <div
+                              key={slot.key}
+                              data-slot={slot.key}
+                              className={`rounded-2xl transition-shadow duration-150 ease-out ${
+                                dropTarget === slot.key ? "ring-2 ring-orange ring-offset-2 ring-offset-paper" : ""
+                              }`}
+                            >
+                              {meal ? (
+                                <DraggableMeal
+                                  slot={slot.key}
+                                  label={`${day.name} ${slot.name.toLowerCase()}: ${meal.recipe.title}`}
+                                  disabled={swapping !== null || busy !== null}
+                                  onHover={setDropTarget}
+                                  onDrop={(to) => moveMeal(slot.key, to)}
+                                >
+                                  {row}
+                                </DraggableMeal>
+                              ) : (
+                                row
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </li>
                   );
@@ -325,6 +367,65 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
         </p>
       ) : null}
     </section>
+  );
+}
+
+/** The meal slot under a point on the screen, other than the one being dragged. */
+function slotAt(point: { x: number; y: number }, exclude: string): string | null {
+  for (const element of document.elementsFromPoint(point.x - window.scrollX, point.y - window.scrollY)) {
+    const slot = element.closest("[data-slot]")?.getAttribute("data-slot");
+    if (slot && slot !== exclude) return slot;
+  }
+  return null;
+}
+
+/** A meal that can be dragged by its grip onto another day. */
+function DraggableMeal({
+  slot,
+  label,
+  disabled,
+  onHover,
+  onDrop,
+  children,
+}: {
+  slot: string;
+  label: string;
+  disabled: boolean;
+  onHover: (slot: string | null) => void;
+  onDrop: (to: string) => void;
+  children: ReactNode;
+}) {
+  const controls = useDragControls();
+  return (
+    <motion.div
+      drag
+      dragControls={controls}
+      dragListener={false}
+      dragSnapToOrigin
+      dragMomentum={false}
+      whileDrag={{ scale: 1.03, zIndex: 30, boxShadow: "0 14px 32px rgba(45, 42, 38, 0.18)" }}
+      onDrag={(_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => onHover(slotAt(info.point, slot))}
+      onDragEnd={(_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+        const target = slotAt(info.point, slot);
+        onHover(null);
+        if (target) onDrop(target);
+      }}
+      className="relative flex items-center rounded-2xl bg-paper"
+    >
+      <button
+        type="button"
+        aria-label={`Drag to move ${label} to another day`}
+        title="Drag to another day"
+        disabled={disabled}
+        onPointerDown={(event) => {
+          if (!disabled) controls.start(event);
+        }}
+        className="grid h-11 w-6 shrink-0 cursor-grab touch-none place-items-center text-ink-soft/50 hover:text-ink active:cursor-grabbing disabled:opacity-30"
+      >
+        <GripVertical size={18} />
+      </button>
+      <div className="min-w-0 flex-1">{children}</div>
+    </motion.div>
   );
 }
 

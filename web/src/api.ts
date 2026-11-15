@@ -104,6 +104,9 @@ export const api = {
     request<Plan>(`/plans/${weekId}/meals/${slot}`, json("PUT", change)),
   /** Bring an existing plan in line with the current diets, keeping meals that fit. */
   applyDiets: (weekId: string) => request<Plan>(`/plans/${weekId}/apply-diets`, { method: "POST" }, PLAN_TIMEOUT_MS),
+  /** Drag and drop: swap two meals, or move one to an empty day. Each day keeps its portions. */
+  moveMeal: (weekId: string, slot: string, toSlot: string) =>
+    request<Plan>(`/plans/${weekId}/meals/${slot}/move`, json("POST", { to_slot: toSlot })),
   /** Swap a meal in one tap for another recipe that keeps the rules. */
   swapMeal: (weekId: string, slot: string) => request<Plan>(`/plans/${weekId}/meals/${slot}/swap`, { method: "POST" }),
   alternatives: (weekId: string, slot: string) =>

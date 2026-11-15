@@ -297,3 +297,68 @@ def test_fallback_recipes_fill_what_the_web_could_not_and_follow_the_diets():
         meal["recipe"]["diet_fit"] == {"mediterranean": True, "high-protein": True}
         for meal in plan["meals"].values()
     )
+
+
+# Drag and drop ------------------------------------------------------------------------------
+
+
+def test_dragging_a_meal_onto_another_day_swaps_them_and_each_day_keeps_its_portions():
+    client = make()
+    for title in ("Cod bake", "Bean stew", "Greek salad", "Lentil soup", "Fish pie"):
+        add(client, title, "vegetarian")
+    plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
+    client.put(
+        f"/api/plans/{WEEK}/meals/thu_dinner",
+        json={"recipe_id": plan["meals"]["thu_dinner"]["recipe"]["id"], "portions": 4},
+        headers=AUTH,
+    )
+    client.post(f"/api/plans/{WEEK}/approve", headers=AUTH)
+    thursday = plan["meals"]["thu_dinner"]["recipe"]["title"]
+    friday = plan["meals"]["fri_dinner"]["recipe"]["title"]
+
+    moved = client.post(
+        f"/api/plans/{WEEK}/meals/thu_dinner/move", json={"to_slot": "fri_dinner"}, headers=AUTH
+    ).json()
+    assert moved["meals"]["fri_dinner"]["recipe"]["title"] == thursday
+    assert moved["meals"]["thu_dinner"]["recipe"]["title"] == friday
+    assert (
+        moved["meals"]["thu_dinner"]["portions"] == 4
+        and moved["meals"]["fri_dinner"]["portions"] == 2
+    )
+    assert moved["status"] == "draft"
+    assert list(moved["meals"]) == [
+        "mon_dinner",
+        "tue_dinner",
+        "wed_dinner",
+        "thu_dinner",
+        "fri_dinner",
+    ]
+
+
+def test_dragging_onto_an_empty_meal_moves_it_there():
+    client = make()
+    add(client, "Only recipe", "vegetarian")
+    client.post(f"/api/plans/{WEEK}/generate", headers=AUTH)
+    plan = client.get(f"/api/plans/{WEEK}", headers=AUTH).json()
+    source = next(iter(plan["meals"]))
+    target = next(slot for slot in DINNERS if slot not in plan["meals"])
+    moved = client.post(
+        f"/api/plans/{WEEK}/meals/{source}/move", json={"to_slot": target}, headers=AUTH
+    ).json()
+    assert (
+        source not in moved["meals"] and moved["meals"][target]["recipe"]["title"] == "Only recipe"
+    )
+    assert moved["meals"][target]["portions"] == 2  # the empty day's own portions
+
+    assert (
+        client.post(
+            f"/api/plans/{WEEK}/meals/{source}/move", json={"to_slot": target}, headers=AUTH
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/api/plans/{WEEK}/meals/{target}/move", json={"to_slot": "brunch"}, headers=AUTH
+        ).status_code
+        == 404
+    )
