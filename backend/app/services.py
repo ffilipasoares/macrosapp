@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 
 from app.ai.base import AIError, RecipeAI
 from app.core import planner
+from app.core.diet import fits_diet, search_phrase
 from app.core.grocery import build_grocery_lines
 from app.core.ingredients import guess_aisle, normalize_name
 from app.core.weeks import SLOT_KEYS, next_week_id, previous_week_ids
@@ -121,12 +122,12 @@ def _fill_with_suggestions(
     total = max(gaps, sum(needs.values()))
     if total == 0:
         return picks, new_ids
-    query = "healthy home-cooked dinners"
-    if needs:
-        query += ", including " + ", ".join(f"at least {n} with {tag}" for tag, n in needs.items())
+    query = search_phrase(settings.diet, needs)
     # Ask for a couple more than needed, since some pages will not work.
     drafts = find_web_recipes(ai, web.read_link, query, total + 2, titles, deadline)
-    found = [Recipe(**draft.model_dump()) for draft in drafts]
+    found = [
+        Recipe(**draft.model_dump()) for draft in drafts if fits_diet(settings.diet, draft.protein)
+    ]
 
     def take(recipe: Recipe) -> None:
         found.remove(recipe)
@@ -152,11 +153,14 @@ def _fill_with_suggestions(
                 picks.pop(spare)
             take(recipe)
 
-    for recipe in list(found):
-        if len(picks) >= slot_count:
+    # Fill the rest with variety: each time, the protein used least so far this week.
+    while len(picks) < slot_count:
+        candidates = [recipe for recipe in found if allowed(recipe)]
+        if not candidates:
             break
-        if allowed(recipe):
-            take(recipe)
+        take(
+            min(candidates, key=lambda recipe: sum(1 for p in picks if p.protein == recipe.protein))
+        )
     return picks, new_ids
 
 
@@ -171,7 +175,7 @@ def generate_plan(
     """Build a draft plan for a week and save it under the week's id."""
     settings = repo.get_settings(household_id)
     slots = settings.cook_slots()
-    recipes = repo.list_recipes(household_id)
+    recipes = [r for r in repo.list_recipes(household_id) if fits_diet(settings.diet, r.protein)]
     recent = recent_recipe_ids(repo, household_id, week_id, settings)
 
     picks = planner.pick_recipes(
@@ -272,12 +276,25 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     return planner.alternatives(
         planned,
         slot,
-        repo.list_recipes(household_id),
+        [r for r in repo.list_recipes(household_id) if fits_diet(settings.diet, r.protein)],
         slot_count,
         settings.rules,
         recent_recipe_ids(repo, household_id, week_id, settings),
         settings.max_repeat_ratio,
     )
+
+
+def swap_meal(
+    repo: Repo, household_id: str, week_id: str, slot: str, rng: random.Random
+) -> WeekPlan:
+    """One-tap swap: another library recipe that keeps the rules, chosen among the best few."""
+    options = meal_alternatives(repo, household_id, week_id, slot)
+    if not options:
+        raise NotFound("No other recipe in your library fits this meal. Add more recipes.")
+    keeping = [option for option in options if option.keeps_rules] or options
+    # Options come best first (rules kept, not eaten recently, cooked longest ago).
+    choice = rng.choice(keeping[:5])
+    return set_meal(repo, household_id, week_id, slot, choice.recipe.id, None)
 
 
 def approve_plan(

@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ExternalLink, Plus, Shuffle, ShoppingBasket } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, Plus, RefreshCw, Shuffle, ShoppingBasket } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
@@ -58,6 +58,21 @@ export function PlanPage() {
   }, [weekId, valid]);
 
   const closeMeal = useCallback(() => setOpenSlot(null), []);
+  const [swapping, setSwapping] = useState<string | null>(null);
+
+  /** One-tap swap from the week view, without opening the meal. */
+  async function quickSwap(slot: string) {
+    setSwapping(slot);
+    setError(null);
+    try {
+      setPlan(await api.swapMeal(weekId!, slot));
+      setListCount(null);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setSwapping(null);
+    }
+  }
 
   if (!valid) return <Navigate to={`/plan/${defaultWeekId()}`} replace />;
 
@@ -171,6 +186,9 @@ export function PlanPage() {
                             meal={meals[slot.key]}
                             reference={settings?.reference_portion}
                             onOpen={() => setOpenSlot(slot.key)}
+                            onSwap={() => quickSwap(slot.key)}
+                            swapping={swapping === slot.key}
+                            swapDisabled={swapping !== null || busy !== null}
                           />
                         ))}
                       </div>
@@ -282,11 +300,17 @@ function MealRow({
   meal,
   reference,
   onOpen,
+  onSwap,
+  swapping = false,
+  swapDisabled = false,
 }: {
   name: string;
   meal: PlanMeal | undefined;
   reference?: ReferencePortion;
   onOpen: () => void;
+  onSwap?: () => void;
+  swapping?: boolean;
+  swapDisabled?: boolean;
 }) {
   if (!meal) {
     return (
@@ -306,7 +330,8 @@ function MealRow({
   }
 
   return (
-    <button onClick={onOpen} className="flex items-center gap-3 rounded-2xl p-2 text-left transition-colors duration-150 ease-out hover:bg-card">
+    <div className={`flex items-center gap-1 rounded-2xl transition-opacity duration-150 ease-out ${swapping ? "opacity-50" : ""}`}>
+    <button onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl p-2 text-left transition-colors duration-150 ease-out hover:bg-card">
       <Thumb title={meal.recipe.title} protein={meal.recipe.protein} image={meal.recipe.image_url} />
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-medium text-ink-soft">{name}</span>
@@ -318,8 +343,21 @@ function MealRow({
           {meal.is_new ? <NewIdea /> : null}
         </span>
       </span>
-      <ChevronRight size={18} className="shrink-0 text-ink-soft/60" />
     </button>
+      {onSwap ? (
+        <button
+          onClick={onSwap}
+          disabled={swapDisabled}
+          aria-label={`Swap ${name.toLowerCase()}: ${meal.recipe.title}`}
+          title="Swap for another recipe"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-soft transition-colors duration-150 ease-out hover:bg-card hover:text-ink disabled:opacity-40"
+        >
+          <RefreshCw size={18} className={swapping ? "animate-spin" : ""} />
+        </button>
+      ) : (
+        <ChevronRight size={18} className="shrink-0 text-ink-soft/60" />
+      )}
+    </div>
   );
 }
 

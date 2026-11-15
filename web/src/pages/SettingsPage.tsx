@@ -10,6 +10,16 @@ import { enablePush, pushState, type PushState } from "../push";
 import { useMe } from "../session";
 import { PROTEINS, type Rule, type Settings } from "../types";
 
+const DIETS = [
+  { value: "", label: "No particular diet" },
+  { value: "mediterranean", label: "Mediterranean" },
+  { value: "high-protein", label: "High protein" },
+  { value: "low-carb", label: "Low carb" },
+  { value: "pescatarian", label: "Pescatarian" },
+  { value: "vegetarian", label: "Vegetarian" },
+  { value: "vegan", label: "Vegan" },
+];
+
 export function SettingsPage() {
   const me = useMe();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -20,6 +30,7 @@ export function SettingsPage() {
   const [staple, setStaple] = useState("");
   const [push, setPush] = useState<PushState | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [dietDraft, setDietDraft] = useState("");
 
   useEffect(() => {
     api.getSettings().then(setSettings).catch((e) => setError(messageOf(e)));
@@ -41,6 +52,8 @@ export function SettingsPage() {
   const staples = settings.staples ?? [];
   const cooked = Object.values(slots).filter((slot) => slot.cook).length;
   const reference = settings.reference_portion ?? { kind: "serving" as const, grams: 400 };
+  const diet = settings.diet ?? "";
+  const customDiet = diet !== "" && !DIETS.some((choice) => choice.value === diet);
   const portionChoices = [
     { kind: "serving" as const, title: "One serving", body: "The recipe divided by how many it serves" },
     { kind: "grams" as const, title: "A fixed weight", body: "The same amount of food for every recipe" },
@@ -194,6 +207,54 @@ export function SettingsPage() {
                 </select>
               </div>
             </div>
+          </Section>
+
+          <Section
+            title="Diet"
+            note="New recipe ideas from the web follow this diet. Vegetarian, vegan and pescatarian also keep other foods out of your plan."
+          >
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Diet">
+              {DIETS.map((choice) => {
+                const on = choice.value === "" ? diet === "" : diet === choice.value;
+                return (
+                  <button
+                    key={choice.label}
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => {
+                      setDietDraft("");
+                      change({ diet: choice.value });
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-out ${
+                      on ? "bg-ink text-paper" : "bg-card text-ink ring-1 ring-line hover:ring-ink-soft"
+                    }`}
+                  >
+                    {choice.label}
+                  </button>
+                );
+              })}
+            </div>
+            <form
+              className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const value = dietDraft.trim().toLowerCase();
+                if (value) change({ diet: value.slice(0, 60) });
+              }}
+            >
+              <input
+                id="diet-custom"
+                value={dietDraft || (customDiet ? diet : "")}
+                onChange={(e) => setDietDraft(e.target.value)}
+                maxLength={60}
+                placeholder="Or type your own, e.g. low FODMAP"
+                aria-label="Your own diet"
+                className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
+              />
+              <button disabled={!dietDraft.trim()} className="whitespace-nowrap rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper disabled:opacity-30">
+                Use
+              </button>
+            </form>
           </Section>
 
           <Section title="Macros portion" note="Macros are shown for one portion. Choose what one portion means.">

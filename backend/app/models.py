@@ -189,6 +189,13 @@ class Settings(BaseModel):
     max_repeat_ratio: float = Field(default=0.2, ge=0, le=1)
     timezone: str = "Europe/Lisbon"
     reference_portion: ReferencePortion = Field(default_factory=ReferencePortion)
+    # Free text, e.g. "mediterranean". Vegetarian, vegan and pescatarian also rule out foods.
+    diet: str = Field(default="", max_length=60)
+
+    @field_validator("diet")
+    @classmethod
+    def _tidy_diet(cls, value: str) -> str:
+        return " ".join(value.split()).lower()
 
     @model_validator(mode="after")
     def _complete_slots(self) -> "Settings":

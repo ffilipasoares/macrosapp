@@ -58,6 +58,16 @@ def set_meal(
     return services.plan_out(repo, household.id, plan)
 
 
+@router.post("/{week_id}/meals/{slot}/swap")
+def swap(week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep) -> PlanOut:
+    """Swap a meal in one tap for another recipe that keeps the rules."""
+    try:
+        plan = services.swap_meal(repo, household.id, _week(week_id), slot, random.Random())
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+    return services.plan_out(repo, household.id, plan)
+
+
 @router.get("/{week_id}/meals/{slot}/alternatives")
 def alternatives(
     week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep

@@ -1,5 +1,7 @@
 """Canned AI responses for local development and tests. Never used in production."""
 
+import re
+
 from app.ai.base import AIError
 from app.models import Ingredient, IngredientNutrition, RecipeDraft
 
@@ -78,5 +80,13 @@ class FakeRecipeAI:
         ]
 
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
-        slug = "-".join(query.lower().split())
-        return [f"https://recipes.example/{slug}-{index + 1}" for index in range(count * 2)]
+        self.calls.append(("search", query))
+        # Pages named after the start of the query, taking turns at any protein a rule asks for.
+        start = "-".join(query.lower().split()[:4])
+        tags = re.findall(r"at least \d+ with ([\w-]+)", query.lower()) or [""]
+        return [
+            f"https://recipes.example/{start}-{tags[index % len(tags)]}-{index + 1}".replace(
+                "--", "-"
+            )
+            for index in range(count * 2)
+        ]

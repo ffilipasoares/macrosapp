@@ -776,6 +776,11 @@ export interface components {
              */
             timezone: string;
             reference_portion?: components["schemas"]["ReferencePortion"];
+            /**
+             * Diet
+             * @default
+             */
+            diet?: string;
         };
         /** SiriItem */
         SiriItem: {
