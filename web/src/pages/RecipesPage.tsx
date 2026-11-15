@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { ErrorNote, Loading, ProteinDot, Sheet, Thumb, listButton, messageOf, primaryButton, quietButton } from "../components/ui";
-import { CATEGORIES, PROTEIN_GROUPS, type Category, type Recipe, type RecipeDraft } from "../types";
+import { CATEGORIES, type Category, type Recipe, type RecipeDraft } from "../types";
 
 type AddMode = "menu" | "images" | "link" | "video" | "voice" | "text";
 
@@ -17,6 +17,8 @@ export function RecipesPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<Category | "all">("all");
+  // A protein ("protein:fish") or a tag ("tag:quick"); null shows everything.
+  const [label, setLabel] = useState<string | null>(null);
   const [adding, setAdding] = useState<AddMode | null>(null);
 
   useEffect(() => {
@@ -28,27 +30,22 @@ export function RecipesPage() {
     () => CATEGORIES.filter((category) => (recipes ?? []).some((recipe) => (recipe.category ?? "main") === category.key)),
     [recipes],
   );
-  const sections = useMemo(() => {
-    const shown = (recipes ?? []).filter(
-      (recipe) =>
-        (type === "all" || (recipe.category ?? "main") === type) &&
-        (!q || recipe.title.toLowerCase().includes(q) || (recipe.ingredients ?? []).some((ingredient) => ingredient.name.includes(q))),
-    );
-    const byTitle = (a: Recipe, b: Recipe) => a.title.localeCompare(b.title);
-    // Main dishes are grouped by protein; every other kind of dish gets its own section.
-    const mains = shown.filter((recipe) => (recipe.category ?? "main") === "main");
-    const grouped = PROTEIN_GROUPS.map((group) => ({
-      title: group.label,
-      recipes: mains.filter((recipe) => group.proteins.includes(recipe.protein ?? "other")).sort(byTitle),
-    }));
-    const known = new Set(PROTEIN_GROUPS.flatMap((group) => group.proteins));
-    grouped.push({ title: "Other main dishes", recipes: mains.filter((recipe) => !known.has(recipe.protein ?? "other")).sort(byTitle) });
-    const others = CATEGORIES.filter((category) => category.key !== "main").map((category) => ({
-      title: category.plural,
-      recipes: shown.filter((recipe) => recipe.category === category.key).sort(byTitle),
-    }));
-    return [...grouped, ...others].filter((section) => section.recipes.length > 0);
-  }, [recipes, type, q]);
+  const labels = useMemo(() => {
+    const all = recipes ?? [];
+    const proteins = [...new Set(all.map((recipe) => recipe.protein ?? "other"))].sort();
+    const tags = [...new Set(all.flatMap((recipe) => recipe.tags ?? []))].sort();
+    return [...proteins.map((p) => `protein:${p}`), ...tags.map((t) => `tag:${t}`)];
+  }, [recipes]);
+  const shown = useMemo(
+    () =>
+      (recipes ?? []).filter((recipe) => {
+        if (type !== "all" && (recipe.category ?? "main") !== type) return false;
+        if (label?.startsWith("protein:") && (recipe.protein ?? "other") !== label.slice(8)) return false;
+        if (label?.startsWith("tag:") && !(recipe.tags ?? []).includes(label.slice(4))) return false;
+        return !q || recipe.title.toLowerCase().includes(q) || (recipe.ingredients ?? []).some((i) => i.name.includes(q));
+      }),
+    [recipes, type, label, q],
+  );
 
   const review = useCallback((draft: RecipeDraft) => navigate("/recipes/new", { state: { draft } }), [navigate]);
   const close = useCallback(() => setAdding(null), []);
@@ -96,7 +93,7 @@ export function RecipesPage() {
                     className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-soft/80"
                   />
                 </label>
-                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by type">
+                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by type of dish">
                   {[{ key: "all" as const, plural: "All" }, ...typesPresent].map((choice) => {
                     const on = choice.key === type;
                     return (
@@ -113,26 +110,39 @@ export function RecipesPage() {
                     );
                   })}
                 </div>
+                {labels.length ? (
+                  <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by protein or tag">
+                    {labels.map((value) => {
+                      const on = value === label;
+                      return (
+                        <button
+                          key={value}
+                          onClick={() => setLabel(on ? null : value)}
+                          aria-pressed={on}
+                          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-sm transition-colors duration-150 ease-out ${
+                            on ? "bg-ink font-semibold text-paper" : "bg-transparent text-ink-soft ring-1 ring-line hover:text-ink hover:ring-ink-soft"
+                          }`}
+                        >
+                          {value.startsWith("protein:") ? <ProteinDot protein={value.slice(8)} /> : `#${value.slice(4)}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
 
-              {sections.length === 0 ? (
-                <p className="py-12 text-center text-ink-soft">{q ? `No recipes match “${query}”.` : "No recipes match."}</p>
+              {shown.length === 0 ? (
+                <p className="py-12 text-center text-ink-soft">
+                  {q ? `No recipes match “${query}”.` : "No recipes match these filters."}
+                </p>
               ) : (
-                sections.map((section) => (
-                  <section key={section.title} className="flex flex-col gap-3">
-                    <h2 className="flex items-baseline gap-2 text-lg font-bold">
-                      {section.title}
-                      <span className="text-sm font-medium text-ink-soft">{section.recipes.length}</span>
-                    </h2>
-                    <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">
-                      {section.recipes.map((recipe) => (
-                        <li key={recipe.id}>
-                          <RecipeTile recipe={recipe} />
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))
+                <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">
+                  {shown.map((recipe) => (
+                    <li key={recipe.id}>
+                      <RecipeTile recipe={recipe} />
+                    </li>
+                  ))}
+                </ul>
               )}
             </>
           )}
