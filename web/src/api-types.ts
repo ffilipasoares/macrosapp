@@ -602,6 +602,8 @@ export interface components {
             prep_minutes?: number | null;
             /** Source Url */
             source_url?: string | null;
+            /** Image Url */
+            image_url?: string | null;
             /**
              * Original Language
              * @default en
@@ -649,6 +651,8 @@ export interface components {
             prep_minutes?: number | null;
             /** Source Url */
             source_url?: string | null;
+            /** Image Url */
+            image_url?: string | null;
             /**
              * Original Language
              * @default en

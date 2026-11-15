@@ -59,3 +59,10 @@ The recipe appears in the app marked "check this" so you can confirm the amounts
 
 Limits: up to 10 images for one recipe, 20 MB in total; videos up to 20 MB
 (a typical 1-minute TikTok is well under that).
+
+## "Save spoken recipe" (optional)
+
+Record a voice memo, then share it: create a shortcut that accepts **Media**,
+posting to the address ending in `/api/shortcuts/recipe-audio` with a Form field
+`file` set to *Shortcut Input*, the same way as the video branch above. In the app
+itself you can simply use **Add recipe → Say it**.

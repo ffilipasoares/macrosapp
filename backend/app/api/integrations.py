@@ -10,6 +10,7 @@ from app.api.recipes import (
     all_files,
     get_link_reader,
     import_link,
+    read_audio,
     read_images,
     read_video,
 )
@@ -78,6 +79,16 @@ async def share_recipe_video(
     """Share sheet: watch a saved cooking video and save the recipe, flagged for review."""
     data, mime_type = await read_video(file)
     draft = ai_call(lambda: ai.recipe_from_video(data, mime_type, caption))
+    return _save_for_review(repo, household.id, draft)
+
+
+@router.post("/shortcuts/recipe-audio")
+async def share_recipe_audio(
+    household: ShortcutHousehold, repo: RepoDep, ai: AIDep, file: UploadFile = File(...)
+) -> Spoken:
+    """Share sheet or "Hey Siri": a spoken recipe, saved for review."""
+    data, mime_type = await read_audio(file)
+    draft = ai_call(lambda: ai.recipe_from_audio(data, mime_type))
     return _save_for_review(repo, household.id, draft)
 
 

@@ -288,7 +288,7 @@ function MealRow({ name, meal, onOpen }: { name: string; meal: PlanMeal | undefi
 
   return (
     <button onClick={onOpen} className="flex items-center gap-3 rounded-2xl p-2 text-left transition-colors duration-150 ease-out hover:bg-card">
-      <Thumb title={meal.recipe.title} protein={meal.recipe.protein} />
+      <Thumb title={meal.recipe.title} protein={meal.recipe.protein} image={meal.recipe.image_url} />
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-medium text-ink-soft">{name}</span>
         <span className="block truncate font-semibold">{meal.recipe.title}</span>
@@ -395,7 +395,7 @@ function MealScreen({
   return (
     <Overlay>
       <div className={`relative pt-[env(safe-area-inset-top)] ${p.soft}`}>
-        <Thumb title={recipe.title} protein={recipe.protein} size="hero" />
+        <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} size="hero" />
         <BackButton onClick={onClose} floating />
       </div>
 
@@ -495,7 +495,7 @@ function OptionList({
         {options.map(({ recipe }) => (
           <li key={recipe.id}>
             <button onClick={() => onPick(recipe.id!)} disabled={disabled} className={listButton}>
-              <Thumb title={recipe.title} protein={recipe.protein} />
+              <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-semibold">{recipe.title}</span>
                 <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-soft">

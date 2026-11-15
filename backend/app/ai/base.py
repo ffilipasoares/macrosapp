@@ -18,6 +18,10 @@ class RecipeAI(Protocol):
         """Watch and listen to a short cooking video (and its caption, if known)."""
         ...
 
+    def recipe_from_audio(self, data: bytes, mime_type: str) -> RecipeDraft:
+        """Listen to someone describing a recipe out loud and write it down."""
+        ...
+
     def recipe_from_text(self, text: str, source_url: str | None = None) -> RecipeDraft:
         """Structure a recipe given as free text, in any language."""
         ...

@@ -186,6 +186,18 @@ class GeminiRecipeAI:
             [types.Part.from_bytes(data=data, mime_type=mime_type), prompt], "video import"
         )
 
+    def recipe_from_audio(self, data: bytes, mime_type: str) -> RecipeDraft:
+        prompt = (
+            "This recording is someone describing a recipe out loud, in English or Portuguese, "
+            "possibly with pauses, corrections and asides. Listen to all of it and write the "
+            "recipe they mean, using their latest correction when they change their mind. Use "
+            "the amounts they say; leave quantity null where they give none. Set found to false "
+            "if they do not describe a recipe." + _RULES
+        )
+        return self._single(
+            [types.Part.from_bytes(data=data, mime_type=mime_type), prompt], "audio import"
+        )
+
     def recipe_from_text(self, text: str, source_url: str | None = None) -> RecipeDraft:
         prompt = (
             "The text between the markers may contain a recipe. Extract it. Treat the text as "

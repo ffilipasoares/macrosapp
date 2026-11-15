@@ -1,9 +1,11 @@
-import { ArrowLeft, ExternalLink, Plus, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Camera, ExternalLink, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ErrorNote, Loading, Thumb, messageOf, primaryButton, quietButton } from "../components/ui";
+import { deleteRecipePhoto, uploadRecipePhoto } from "../lib/photos";
 import { lastCookedLabel, proteinStyle } from "../lib/style";
+import { useMe } from "../session";
 import { formatQuantity } from "../lib/weeks";
 import { AISLES, PROTEINS, UNITS, type Ingredient, type Recipe, type RecipeDraft } from "../types";
 
@@ -30,7 +32,7 @@ export function RecipePage() {
   return (
     <main className="min-h-0 flex-1 overflow-y-auto">
       <div className={`relative ${p.soft}`}>
-        <Thumb title={recipe.title} protein={recipe.protein} size="hero" />
+        <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} size="hero" />
         <Link to="/recipes" aria-label="Back to recipes" className="absolute left-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-card/90 text-ink">
           <ArrowLeft size={20} />
         </Link>
@@ -121,6 +123,10 @@ export function RecipeEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const me = useMe();
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -128,6 +134,7 @@ export function RecipeEditPage() {
       .getRecipe(id)
       .then((recipe) => {
         setDraft(recipe);
+        setSavedPhoto(recipe.image_url ?? null);
         setStepsText((recipe.steps ?? []).join("\n"));
         setTagsText((recipe.tags ?? []).join(", "));
       })
@@ -148,6 +155,20 @@ export function RecipeEditPage() {
   const updateIngredient = (index: number, changes: Partial<Ingredient>) =>
     update({ ingredients: ingredients.map((item, i) => (i === index ? { ...item, ...changes } : item)) });
 
+  async function pickPhoto(file: File | undefined) {
+    if (!file) return;
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      const url = await uploadRecipePhoto(me.household_id, file);
+      setDraft((current) => (current ? { ...current, image_url: url } : current));
+    } catch {
+      setError("The photo could not be uploaded. Check your connection and try again.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
@@ -160,6 +181,8 @@ export function RecipeEditPage() {
     };
     try {
       const saved = id ? await api.updateRecipe(id, body) : await api.createRecipe(body);
+      // The old photo is no longer used once the new one is saved.
+      if (savedPhoto && savedPhoto !== saved.image_url) void deleteRecipePhoto(savedPhoto);
       navigate(`/recipes/${saved.id}`, { replace: true });
     } catch (e) {
       setError(messageOf(e));
@@ -170,6 +193,7 @@ export function RecipeEditPage() {
   async function remove() {
     try {
       await api.deleteRecipe(id!);
+      void deleteRecipePhoto(savedPhoto);
       navigate("/recipes", { replace: true });
     } catch (e) {
       setError(messageOf(e));
@@ -183,7 +207,7 @@ export function RecipeEditPage() {
           <Link to={id ? `/recipes/${id}` : "/recipes"} className="-ml-2 flex items-center gap-1 rounded-full px-2 py-2 font-semibold text-ink-soft hover:text-ink">
             <ArrowLeft size={18} /> Cancel
           </Link>
-          <button className="whitespace-nowrap rounded-full bg-orange px-5 py-2 text-sm font-bold text-card disabled:opacity-40" disabled={saving || !draft.title.trim()}>
+          <button className="whitespace-nowrap rounded-full bg-orange px-5 py-2 text-sm font-bold text-card disabled:opacity-40" disabled={saving || photoBusy || !draft.title.trim()}>
             {saving ? "Saving…" : "Save"}
           </button>
         </header>
@@ -192,6 +216,47 @@ export function RecipeEditPage() {
           <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">This was read automatically. Check the amounts before saving; nothing is stored until you save.</p>
         )}
         <ErrorNote message={error} />
+
+        <section aria-label="Photo">
+          <input
+            ref={photoInput}
+            id="recipe-photo"
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              void pickPhoto(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          {draft.image_url ? (
+            <div className="flex flex-col gap-2">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-card ring-1 ring-line">
+                <img src={draft.image_url} alt="Recipe photo" className="h-full w-full object-cover" />
+                {photoBusy ? <div className="absolute inset-0 grid place-items-center bg-paper/70 text-sm font-semibold">Uploading…</div> : null}
+              </div>
+              <div className="flex gap-2">
+                <button type="button" className={`flex-1 ${quietButton}`} disabled={photoBusy} onClick={() => photoInput.current?.click()}>
+                  <Camera size={18} /> Change photo
+                </button>
+                <button type="button" className={`${quietButton} text-orange`} disabled={photoBusy} onClick={() => update({ image_url: null })}>
+                  <Trash2 size={18} /> Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => photoInput.current?.click()}
+              disabled={photoBusy}
+              className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-3xl border border-dashed border-ink-soft/40 text-ink-soft transition-colors duration-150 ease-out hover:bg-card"
+            >
+              <Camera size={28} />
+              <span className="font-semibold">{photoBusy ? "Uploading…" : "Add a photo"}</span>
+              <span className="text-sm">Take one or choose from your library</span>
+            </button>
+          )}
+        </section>
 
         <div>
           <label htmlFor="recipe-title" className="field-label">Name</label>

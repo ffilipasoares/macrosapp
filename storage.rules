@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// Recipe photos. Only members of a household can upload or remove its photos.
+// The app shows a photo through its download link, which carries an unguessable token.
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isMember(householdId) {
+      return request.auth != null
+        && request.auth.uid in firestore.get(/databases/(default)/documents/households/$(householdId)).data.members;
+    }
+
+    match /households/{householdId}/recipes/{fileName} {
+      allow read, delete: if isMember(householdId);
+      allow create, update: if isMember(householdId)
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

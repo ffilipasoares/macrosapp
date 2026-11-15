@@ -277,3 +277,112 @@ def test_gemini_errors_say_what_to_fix(code, expected):
     message = str(ai._explain(error))
     assert expected in message and f"(error {code})" in message
     assert "could not be reached" in str(ai._explain(ConnectionError()))
+
+
+# Spoken recipes ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("mime", "sent_as"),
+    [
+        ("audio/mp4", "audio/mp4"),
+        ("audio/x-m4a", "audio/mp4"),
+        ("audio/webm;codecs=opus", "audio/webm"),
+        ("audio/mpeg", "audio/mpeg"),
+    ],
+)
+def test_spoken_recipe(ctx, mime, sent_as):
+    client, ai = ctx
+    reply = client.post(
+        "/api/recipes/import/audio", files={"file": ("voice", b"audio bytes", mime)}, headers=AUTH
+    )
+    assert reply.status_code == 200 and reply.json()["title"] == "Recipe from a voice note"
+    assert ai.calls[-1] == ("audio", sent_as)
+
+
+def test_spoken_recipe_limits(ctx):
+    client, _ = ctx
+    pdf = {"file": ("a.pdf", b"%PDF", "application/pdf")}
+    assert client.post("/api/recipes/import/audio", files=pdf, headers=AUTH).status_code == 415
+    empty = {"file": ("voice.m4a", b"", "audio/mp4")}
+    assert client.post("/api/recipes/import/audio", files=empty, headers=AUTH).status_code == 422
+
+
+def test_spoken_recipe_from_the_share_sheet(ctx):
+    client, _ = ctx
+    key = {
+        "Authorization": "Bearer " + client.get("/api/me", headers=AUTH).json()["shortcut_token"]
+    }
+    memo = {"file": ("Memo.m4a", b"memo", "audio/x-m4a")}
+    assert client.post("/api/shortcuts/recipe-audio", files=memo, headers=key).status_code == 200
+    assert client.get("/api/recipes", headers=AUTH).json()[0]["needs_review"] is True
+
+
+# Photos ----------------------------------------------------------------------
+
+
+def test_recipe_photo_is_saved_changed_and_removed(ctx):
+    client, _ = ctx
+    photo = "https://firebasestorage.googleapis.com/v0/b/p/o/households%2Fh%2Frecipes%2Fa.jpg?alt=media&token=t"
+    created = client.post(
+        "/api/recipes", json={"title": "Caldo verde", "image_url": photo}, headers=AUTH
+    ).json()
+    assert created["image_url"] == photo
+    changed = client.put(
+        f"/api/recipes/{created['id']}", json={**created, "image_url": None}, headers=AUTH
+    ).json()
+    assert changed["image_url"] is None
+    bad = client.post(
+        "/api/recipes", json={"title": "X", "image_url": "javascript:alert(1)"}, headers=AUTH
+    )
+    assert bad.status_code == 422
+
+
+def test_link_import_keeps_the_page_photo(ctx):
+    client, _ = ctx
+
+    def reader(url: str) -> LinkContent:
+        return LinkContent(
+            url=url,
+            text="Caldo verde\n500 g potatoes",
+            kind="recipe-data",
+            image_url="https://img.example/caldo.jpg",
+        )
+
+    client.app.state.read_link = reader
+    draft = client.post(
+        "/api/recipes/import/link", json={"url": "https://recipes.example/caldo"}, headers=AUTH
+    ).json()
+    assert draft["image_url"] == "https://img.example/caldo.jpg"
+
+
+@pytest.mark.parametrize(
+    ("page", "expected"),
+    [
+        (
+            RECIPE_PAGE.replace(
+                '"name": "Caldo verde",',
+                '"name": "Caldo verde", "image": ["https://img.example/1.jpg", "https://img.example/2.jpg"],',
+            ),
+            "https://img.example/1.jpg",
+        ),
+        (
+            RECIPE_PAGE.replace(
+                '"name": "Caldo verde",',
+                '"name": "Caldo verde", "image": {"@type": "ImageObject", "url": "https://img.example/obj.jpg"},',
+            ),
+            "https://img.example/obj.jpg",
+        ),
+        (
+            '<html><head><meta property="og:image" content="/media/soup.jpg"></head></html>',
+            "https://recipes.example/media/soup.jpg",
+        ),
+        (
+            '<meta content="https://img.example/tw.jpg" name="twitter:image">',
+            "https://img.example/tw.jpg",
+        ),
+        ("<html><head></head></html>", None),
+    ],
+)
+def test_page_photo(page, expected):
+    assert links.page_image(page, "https://recipes.example/caldo-verde") == expected

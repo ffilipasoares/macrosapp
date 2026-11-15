@@ -1,11 +1,12 @@
-import { Camera, ClipboardPaste, Clapperboard, Globe, ImagePlus, Link2, PenLine, Plus, Search, X } from "lucide-react";
+import { Camera, ClipboardPaste, Clapperboard, ImagePlus, Link2, Mic, PenLine, Plus, Search, X } from "lucide-react";
+import { VoiceRecorder } from "../components/VoiceRecorder";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { ErrorNote, Loading, ProteinDot, Sheet, Thumb, listButton, messageOf, primaryButton } from "../components/ui";
+import { ErrorNote, Loading, ProteinDot, Sheet, Thumb, listButton, messageOf, primaryButton, quietButton } from "../components/ui";
 import type { Recipe, RecipeDraft } from "../types";
 
-type AddMode = "menu" | "images" | "video" | "text" | "search";
+type AddMode = "menu" | "images" | "link" | "video" | "voice" | "text";
 
 const MAX_IMAGES = 10;
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024;
@@ -103,7 +104,7 @@ export function RecipesPage() {
                     <li key={recipe.id}>
                       <Link to={`/recipes/${recipe.id}`} className="group flex w-full flex-col text-left">
                         <span className="relative block transition-transform duration-200 ease-out group-hover:scale-[1.02]">
-                          <Thumb title={recipe.title} protein={recipe.protein} size="tile" />
+                          <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} size="tile" />
                           {recipe.needs_review ? (
                             <span className="absolute left-2 top-2 rounded-full bg-mustard px-2 py-0.5 text-[11px] font-semibold text-ink">Check this</span>
                           ) : null}
@@ -142,15 +143,15 @@ function AddSheet({
   const navigate = useNavigate();
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  const audioInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<RecipeDraft[] | null>(null);
   const [images, setImages] = useState<{ file: File; url: string }[]>([]);
   const [link, setLink] = useState("");
   const [video, setVideo] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
+  const [voice, setVoice] = useState<File | null>(null);
 
   // Free the image previews when the sheet closes.
   const previewUrls = useRef<string[]>([]);
@@ -179,15 +180,15 @@ function AddSheet({
     setMode("images");
   }
 
-  function pickVideo(list: FileList | null) {
+  function pickFile(list: FileList | null, set: (file: File) => void, what: string) {
     const file = list?.[0];
     if (!file) return;
     if (file.size > MAX_VIDEO_BYTES) {
-      setError("That video is larger than 20 MB. Trim it, or send screenshots instead.");
+      setError(`That ${what} is larger than 20 MB. Send a shorter one.`);
       return;
     }
     setError(null);
-    setVideo(file);
+    set(file);
   }
 
   const hiddenInputs = (
@@ -211,7 +212,18 @@ function AddSheet({
         accept="video/*"
         hidden
         onChange={(e) => {
-          pickVideo(e.target.files);
+          pickFile(e.target.files, setVideo, "video");
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={audioInput}
+        id="audio-file"
+        type="file"
+        accept="audio/*"
+        hidden
+        onChange={(e) => {
+          pickFile(e.target.files, setVoice, "recording");
           e.target.value = "";
         }}
       />
@@ -258,13 +270,12 @@ function AddSheet({
     );
   }
 
-  if (mode === "video") {
+  if (mode === "link") {
     return (
-      <Sheet title="TikTok or video" subtitle="Paste a TikTok or recipe link, or choose a cooking video you saved." onClose={onClose}>
-        {hiddenInputs}
+      <Sheet title="From a link" subtitle="Paste a link to a TikTok, a recipe website or a blog." onClose={onClose}>
         <ErrorNote message={error} />
         <form
-          className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft"
+          className="flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             void run(() => api.importLink(link.trim()), onDraft);
@@ -274,24 +285,36 @@ function AddSheet({
             id="recipe-link"
             type="url"
             inputMode="url"
+            autoFocus
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder="https://vm.tiktok.com/…"
-            aria-label="Link to a TikTok or recipe page"
-            className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
+            placeholder="https://…"
+            aria-label="Link to the recipe"
+            className="field"
           />
-          <button disabled={busy || link.trim().length < 8} className="whitespace-nowrap rounded-full bg-orange px-4 py-2 text-sm font-semibold text-card disabled:opacity-40">
-            {busy && !video ? "Reading…" : "Read link"}
+          <button className={primaryButton} disabled={busy || link.trim().length < 8}>
+            {busy ? "Reading the page…" : "Get the recipe"}
           </button>
         </form>
-        <p className="text-xs text-ink-soft">
-          A TikTok link reads the video's caption. If the recipe is only spoken or shown in the video, send the video below instead.
-        </p>
+        <ul className="flex flex-col gap-1 text-sm text-ink-soft">
+          <li>Recipe websites: the ingredients, method and photo are taken from the page.</li>
+          <li>
+            TikTok: the recipe is read from the video's caption. If it is only spoken in the video,{" "}
+            <button className="font-semibold text-blue underline-offset-4 hover:underline" onClick={() => setMode("video")}>
+              send the video
+            </button>{" "}
+            instead.
+          </li>
+        </ul>
+      </Sheet>
+    );
+  }
 
-        <div className="flex items-center gap-3 text-sm text-ink-soft" aria-hidden="true">
-          <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-        </div>
-
+  if (mode === "video") {
+    return (
+      <Sheet title="From a video" subtitle="A cooking video you saved, for example from TikTok (Share, then Save video)." onClose={onClose}>
+        {hiddenInputs}
+        <ErrorNote message={error} />
         {video ? (
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3 rounded-2xl bg-card p-3 ring-1 ring-line">
@@ -319,16 +342,30 @@ function AddSheet({
             </button>
           </div>
         ) : (
-          <button onClick={() => videoInput.current?.click()} disabled={busy} className={listButton}>
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-pink-soft text-ink">
-              <Clapperboard size={20} />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-semibold">Choose a saved video</span>
-              <span className="block text-sm text-ink-soft">In TikTok: Share, then Save video. Up to 20 MB.</span>
-            </span>
+          <button onClick={() => videoInput.current?.click()} disabled={busy} className={quietButton}>
+            <Clapperboard size={18} /> Choose a video (up to 20 MB)
           </button>
         )}
+      </Sheet>
+    );
+  }
+
+  if (mode === "voice") {
+    return (
+      <Sheet title="Say it" subtitle="Tell the recipe out loud, in English or Portuguese." onClose={onClose}>
+        {hiddenInputs}
+        <ErrorNote message={error} />
+        <VoiceRecorder onRecorded={setVoice} disabled={busy} />
+        <p className="text-sm text-ink-soft">
+          Say the name, how many it serves, each ingredient with its amount, then the steps. Pauses and corrections are fine.
+        </p>
+        {voice && !voice.name.startsWith("voice-recipe") ? <p className="text-sm font-medium">Voice memo: {voice.name}</p> : null}
+        <button className={primaryButton} disabled={busy || !voice} onClick={() => voice && run(() => api.importAudio(voice), onDraft)}>
+          {busy ? "Listening… this can take a moment" : "Create recipe"}
+        </button>
+        <button onClick={() => audioInput.current?.click()} disabled={busy} className="text-sm font-semibold text-blue underline-offset-4 hover:underline">
+          Or choose a voice memo
+        </button>
       </Sheet>
     );
   }
@@ -352,58 +389,12 @@ function AddSheet({
     );
   }
 
-  if (mode === "search") {
-    return (
-      <Sheet title="Search the web" subtitle="Find new ideas to save." onClose={onClose}>
-        <ErrorNote message={error} />
-        <form
-          className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void run(() => api.searchRecipes(query), setResults);
-          }}
-        >
-          <input
-            id="idea-query"
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="healthy dinner with salmon"
-            aria-label="What are you looking for?"
-            className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
-          />
-          <button disabled={busy || query.trim().length < 2} className="whitespace-nowrap rounded-full bg-orange px-4 py-2 text-sm font-semibold text-card disabled:opacity-40">
-            {busy ? "Searching…" : "Search"}
-          </button>
-        </form>
-        {busy ? <p className="text-sm text-ink-soft">Searching the web and reading the recipes. This can take up to a minute.</p> : null}
-        {results && results.length === 0 && <p className="text-sm text-ink-soft">Nothing found. Try different words.</p>}
-        <ul className="flex flex-col">
-          {(results ?? []).map((draft, index) => (
-            <li key={index}>
-              <button onClick={() => onDraft(draft)} className={listButton}>
-                <Thumb title={draft.title} protein={draft.protein} />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{draft.title}</span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-soft">
-                    <ProteinDot protein={draft.protein} />
-                    <span>· serves {draft.servings}</span>
-                    {draft.prep_minutes ? <span>· {draft.prep_minutes} min</span> : null}
-                  </span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Sheet>
-    );
-  }
-
   const ways = [
+    { Icon: Link2, title: "From a link", body: "TikTok, a recipe website or a blog", tint: "bg-blue-soft", onClick: () => setMode("link") },
     { Icon: Camera, title: "Screenshots or photos", body: "One or several, read and translated for you", tint: "bg-mustard-soft", onClick: () => imageInput.current?.click() },
-    { Icon: Link2, title: "TikTok or video", body: "Paste a link, or choose a saved video", tint: "bg-pink-soft", onClick: () => setMode("video") },
+    { Icon: Mic, title: "Say it", body: "Talk through the recipe and it is written down", tint: "bg-orange-soft", onClick: () => setMode("voice") },
+    { Icon: Clapperboard, title: "From a video", body: "A cooking video you saved", tint: "bg-pink-soft", onClick: () => setMode("video") },
     { Icon: ClipboardPaste, title: "Paste text", body: "From a message or a note", tint: "bg-periwinkle-soft", onClick: () => setMode("text") },
-    { Icon: Globe, title: "Search the web", body: "Find new ideas to save", tint: "bg-blue-soft", onClick: () => setMode("search") },
     { Icon: PenLine, title: "Type it in", body: "Write it yourself", tint: "bg-green-soft", onClick: () => navigate("/recipes/new") },
   ];
 

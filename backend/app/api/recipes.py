@@ -16,6 +16,20 @@ MAX_IMAGES = 10
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024  # Gemini accepts up to about 20 MB sent inline
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
 VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/webm", "video/x-m4v", "video/3gpp"}
+# Recorded in the browser (Safari: audio/mp4, Chrome: audio/webm) or a voice memo (m4a).
+AUDIO_TYPES = {
+    "audio/mp4": "audio/mp4",
+    "audio/m4a": "audio/mp4",
+    "audio/x-m4a": "audio/mp4",
+    "audio/aac": "audio/aac",
+    "audio/mpeg": "audio/mpeg",
+    "audio/mp3": "audio/mpeg",
+    "audio/wav": "audio/wav",
+    "audio/x-wav": "audio/wav",
+    "audio/webm": "audio/webm",
+    "audio/ogg": "audio/ogg",
+    "audio/flac": "audio/flac",
+}
 
 
 class TextImport(BaseModel):
@@ -24,11 +38,6 @@ class TextImport(BaseModel):
 
 class LinkImport(BaseModel):
     url: str = Field(min_length=8, max_length=2000)
-
-
-class SearchRequest(BaseModel):
-    query: str = Field(min_length=2, max_length=200)
-    count: int = Field(default=4, ge=1, le=6)
 
 
 def _mime(file: UploadFile) -> str:
@@ -67,6 +76,18 @@ async def read_video(file: UploadFile) -> tuple[bytes, str]:
     return data, mime_type
 
 
+async def read_audio(file: UploadFile) -> tuple[bytes, str]:
+    mime_type = AUDIO_TYPES.get(_mime(file))
+    if mime_type is None:
+        raise HTTPException(415, "Send an M4A, MP3, WAV or WebM recording")
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if not data:
+        raise HTTPException(422, "The recording is empty")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, "The recording is larger than 20 MB. Keep it under 10 minutes.")
+    return data, mime_type
+
+
 def ai_call[T](work: Callable[[], T]) -> T:
     try:
         return work()
@@ -90,6 +111,7 @@ def import_link(ai: RecipeAI, read_link: Callable[[str], LinkContent], url: str)
             ) from error
         raise HTTPException(422, str(error)) from error
     draft.source_url = draft.source_url or content.url
+    draft.image_url = draft.image_url or content.image_url
     return draft
 
 
@@ -167,6 +189,15 @@ async def import_video(
     return ai_call(lambda: ai.recipe_from_video(data, mime_type, caption))
 
 
+@router.post("/import/audio")
+async def import_audio(
+    household: CurrentHousehold, ai: AIDep, file: UploadFile = File(...)
+) -> RecipeDraft:
+    """A recipe said out loud: recorded in the app, or a voice memo."""
+    data, mime_type = await read_audio(file)
+    return ai_call(lambda: ai.recipe_from_audio(data, mime_type))
+
+
 @router.post("/import/link")
 def import_link_route(
     body: LinkImport, household: CurrentHousehold, ai: AIDep, request: Request
@@ -177,11 +208,3 @@ def import_link_route(
 @router.post("/import/text")
 def import_text(body: TextImport, household: CurrentHousehold, ai: AIDep) -> RecipeDraft:
     return ai_call(lambda: ai.recipe_from_text(body.text))
-
-
-@router.post("/search")
-def search(
-    body: SearchRequest, household: CurrentHousehold, repo: RepoDep, ai: AIDep
-) -> list[RecipeDraft]:
-    titles = [recipe.title for recipe in repo.list_recipes(household.id)]
-    return ai_call(lambda: ai.search_recipes(body.query, body.count, titles))

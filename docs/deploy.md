@@ -11,6 +11,7 @@ Firebase project id throughout.
    the cost should be close to zero; set a budget alert in Google Cloud Billing.
 2. **Authentication** → Sign-in method → enable **Google**.
 3. **Firestore Database** → create it in a European location, production mode.
+   Then **Storage** → **Get started** (production mode, same region), for recipe photos.
 4. **Project settings → General → Your apps** → add a **Web app** and keep the
    config values for step 3.
 5. **Project settings → Cloud Messaging → Web Push certificates** → generate a
@@ -59,7 +60,10 @@ cd web
 cp .env.example .env.local
 ```
 
-Fill in `.env.local` from step 1.4 and 1.5. Set
+Fill in `.env.local` from step 1.4 and 1.5, including
+`VITE_FIREBASE_STORAGE_BUCKET` (the `storageBucket` value, usually
+`PROJECT.firebasestorage.app`). The first `storage` deploy asks to let Storage
+read Firestore, so the photo rules can check household membership; answer yes. Set
 `VITE_FIREBASE_AUTH_DOMAIN=PROJECT.web.app` (the address the app is served
 from), which keeps Google sign-in working inside an installed iPhone app.
 
@@ -67,7 +71,7 @@ from), which keeps Google sign-in working inside an installed iPhone app.
 npm install
 npm run build
 cd ..
-firebase deploy --only hosting,firestore
+firebase deploy --only hosting,firestore,storage
 ```
 
 The app is now at `https://PROJECT.web.app`.

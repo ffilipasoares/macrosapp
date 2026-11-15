@@ -81,7 +81,16 @@ class RecipeDraft(BaseModel):
     tags: list[str] = Field(default_factory=list)
     prep_minutes: int | None = Field(default=None, ge=0, le=1440)
     source_url: str | None = None
+    # A photo: uploaded to Firebase Storage by the app, or taken from the recipe's web page.
+    image_url: str | None = Field(default=None, max_length=2000)
     original_language: str = "en"
+
+    @field_validator("image_url")
+    @classmethod
+    def _web_image(cls, value: str | None) -> str | None:
+        if value and not value.startswith(("https://", "http://")):
+            raise ValueError("image_url must be a web address")
+        return value or None
 
     @field_validator("protein", mode="before")
     @classmethod

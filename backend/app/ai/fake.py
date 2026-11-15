@@ -41,6 +41,12 @@ class FakeRecipeAI:
             raise AIError("No recipe was found in what you sent.")
         return _SAMPLE.model_copy(deep=True, update={"title": "Recipe from a video"})
 
+    def recipe_from_audio(self, data: bytes, mime_type: str) -> RecipeDraft:
+        self.calls.append(("audio", mime_type))
+        if not data:
+            raise AIError("No recipe was found in what you sent.")
+        return _SAMPLE.model_copy(deep=True, update={"title": "Recipe from a voice note"})
+
     def recipe_from_text(self, text: str, source_url: str | None = None) -> RecipeDraft:
         self.calls.append(("text", text))
         first_line = text.strip().splitlines()[0][:80] if text.strip() else ""

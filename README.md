@@ -19,7 +19,8 @@ Google Cloud.
 | Stop writing grocery lists | Merges all ingredients of the approved plan into one list, grouped by aisle, minus what you always have |
 | Add things during the week | Type them in, or say "Hey Siri, add to groceries" |
 | Save a recipe you saw | Reads it from one or several screenshots, a TikTok or recipe link, a saved cooking video, or pasted text; translates it to English; lets you check it before saving |
-| Find new ideas | Searches the web for recipes ("healthy dinner with lentils") you can save in one tap |
+| Keep recipes recognisable | Add a photo to any recipe; recipes from websites bring their own photo |
+| Capture a recipe by talking | Record yourself describing it; it is transcribed and turned into a recipe |
 
 ## The screens
 
@@ -35,8 +36,9 @@ Google Cloud.
 - **Generate a new plan** starts over.
 
 **Recipes**. Your library, searchable by name or ingredient and filterable by protein.
-- **Add recipe** offers four ways: a screenshot or photo, pasted text, a web
-  search, or typing it yourself.
+- **Add recipe** offers six ways: a link (TikTok, recipe website, blog), one or
+  several screenshots, saying it out loud, a saved video, pasted text, or typing it.
+- Every recipe can have a photo, added or changed in its edit form.
 - Anything read by AI opens in the edit form first. Nothing is saved until you
   press Save.
 - A recipe page is the read view for cooking; Edit opens the form.

@@ -226,7 +226,9 @@ def test_without_ai_a_small_library_leaves_open_slots():
     plan = client.post(f"/api/plans/{WEEK}/generate", headers=auth()).json()
     assert plan["meals"] == {} and len(plan["open_slots"]) == 9 and plan["notes"]
     assert (
-        client.post("/api/recipes/search", json={"query": "soup"}, headers=auth()).status_code
+        client.post(
+            "/api/recipes/import/text", json={"text": "Lentil soup, 200 g lentils"}, headers=auth()
+        ).status_code
         == 503
     )
 
@@ -275,8 +277,9 @@ def test_recipe_imports_return_a_draft_to_review(ctx):
     )
     assert text.json()["title"] == "Arroz de pato"
 
-    found = client.post("/api/recipes/search", json={"query": "fish", "count": 3}, headers=auth())
-    assert len(found.json()) == 3
+    assert client.post(
+        "/api/recipes/search", json={"query": "fish"}, headers=auth()
+    ).status_code in (404, 405)
 
 
 def test_shared_screenshot_is_saved_for_review(ctx):

@@ -36,6 +36,7 @@ class LinkContent:
     url: str
     text: str
     kind: str  # "tiktok", "recipe-data" or "page"
+    image_url: str | None = None
 
 
 def _is_public_host(host: str) -> bool:
@@ -140,6 +141,43 @@ def _instructions(value: object) -> list[str]:
     return []
 
 
+def _image_from(value: object) -> str | None:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and value:
+        return _image_from(value[0])
+    if isinstance(value, dict):
+        return _image_from(value.get("url") or value.get("contentUrl"))
+    return None
+
+
+def page_image(page: str, base_url: str) -> str | None:
+    """The recipe's photo: from its schema.org data, else the page's sharing image."""
+    image = None
+    for block in re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', page, re.S | re.I
+    ):
+        try:
+            recipe = _find_recipe(json.loads(html.unescape(block.strip())))
+        except json.JSONDecodeError:
+            continue
+        if recipe:
+            image = _image_from(recipe.get("image"))
+            if image:
+                break
+    if not image:
+        for tag in re.findall(r"<meta[^>]+>", page, re.I):
+            if re.search(r'(property|name)=["\'](og:image|twitter:image)["\']', tag, re.I):
+                match = re.search(r'content=["\']([^"\']+)["\']', tag, re.I)
+                if match:
+                    image = html.unescape(match.group(1))
+                    break
+    if not image:
+        return None
+    image = urljoin(base_url, image.strip())
+    return image if image.startswith(("https://", "http://")) and len(image) <= 2000 else None
+
+
 def recipe_from_json_ld(page: str) -> str | None:
     """The recipe described in a page's schema.org data, as plain text, if there is one."""
     for block in re.findall(
@@ -183,13 +221,14 @@ def read_link(url: str, client: httpx.Client | None = None) -> LinkContent:
         if is_tiktok(url):
             return tiktok_caption(client, url)
         final_url, page = fetch(client, url)
+        image = page_image(page, final_url)
         structured = recipe_from_json_ld(page)
         if structured:
-            return LinkContent(url=final_url, text=structured, kind="recipe-data")
+            return LinkContent(url=final_url, text=structured, kind="recipe-data", image_url=image)
         text = _strip_tags(page)
         if len(text) < 80:
             raise LinkError("That page has no readable text. Try a screenshot instead.")
-        return LinkContent(url=final_url, text=text[:20000], kind="page")
+        return LinkContent(url=final_url, text=text[:20000], kind="page", image_url=image)
     except httpx.HTTPError as error:
         raise LinkError("The link could not be opened. Check it and try again.") from error
     finally:

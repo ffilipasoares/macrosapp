@@ -60,9 +60,14 @@ export const api = {
     if (caption.trim()) form.append("caption", caption.trim());
     return request<RecipeDraft>("/recipes/import/video", { method: "POST", body: form });
   },
+  /** A recipe said out loud: recorded in the app or a voice memo. */
+  importAudio: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<RecipeDraft>("/recipes/import/audio", { method: "POST", body: form });
+  },
   importLink: (url: string) => request<RecipeDraft>("/recipes/import/link", json("POST", { url })),
   importText: (text: string) => request<RecipeDraft>("/recipes/import/text", json("POST", { text })),
-  searchRecipes: (query: string) => request<RecipeDraft[]>("/recipes/search", json("POST", { query, count: 4 })),
 
   getPlan: (weekId: string) => request<Plan | null>(`/plans/${weekId}`),
   generatePlan: (weekId: string) => request<Plan>(`/plans/${weekId}/generate`, { method: "POST" }),
@@ -77,11 +82,11 @@ export const api = {
   registerDevice: (token: string) => request<void>("/devices", json("POST", { token })),
 };
 
-/** Scale a photo down to at most 2000 px on its longest side, as JPEG. Falls back to the original. */
-async function shrinkImage(file: File): Promise<Blob | File> {
+/** Scale a photo down to at most `maxSide` px on its longest side, as JPEG. Falls back to the original. */
+export async function shrinkImage(file: File, maxSide = 2000): Promise<Blob | File> {
   try {
     const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
     if (scale === 1 && file.size < 1_500_000) return file;
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(bitmap.width * scale);

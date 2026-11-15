@@ -105,19 +105,40 @@ export function Stepper({ value, onChange, min = 1, max = 30, label }: { value: 
   );
 }
 
-/** A recipe's picture. There are no photos yet, so it is the first letter on the protein's tint. */
-export function Thumb({ title, protein, size = "sm" }: { title: string; protein?: string | null; size?: "sm" | "tile" | "hero" }) {
+/** A recipe's picture: its photo if it has one, otherwise its first letter on the protein's tint. */
+export function Thumb({
+  title,
+  protein,
+  image,
+  size = "sm",
+}: {
+  title: string;
+  protein?: string | null;
+  image?: string | null;
+  size?: "sm" | "tile" | "hero";
+}) {
   const p = proteinStyle(protein);
   const letter = (title.trim()[0] ?? "?").toUpperCase();
-  if (size === "hero") {
-    return (
-      <div className={`mx-auto grid aspect-[4/3] max-h-[280px] w-full max-w-2xl place-items-center text-7xl font-bold text-ink/60 ${p.soft}`}>{letter}</div>
-    );
-  }
-  if (size === "tile") {
-    return <span className={`grid aspect-square w-full place-items-center rounded-2xl text-4xl font-bold text-ink/60 ${p.soft}`}>{letter}</span>;
-  }
-  return <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-lg font-bold ${p.soft}`}>{letter}</span>;
+  const box =
+    size === "hero"
+      ? "mx-auto aspect-[4/3] max-h-[320px] w-full max-w-2xl text-7xl"
+      : size === "tile"
+        ? "aspect-square w-full rounded-2xl text-4xl"
+        : "h-12 w-12 shrink-0 rounded-xl text-lg";
+  return (
+    <span className={`relative grid place-items-center overflow-hidden font-bold text-ink/60 ${p.soft} ${box}`}>
+      {letter}
+      {image ? (
+        <img
+          src={image}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(e) => (e.currentTarget.style.display = "none")}
+        />
+      ) : null}
+    </span>
+  );
 }
 
 export function ProteinDot({ protein, withLabel = true }: { protein?: string | null; withLabel?: boolean }) {
