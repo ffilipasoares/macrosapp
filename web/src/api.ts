@@ -59,6 +59,8 @@ export const api = {
   createRecipe: (draft: RecipeDraft) => request<Recipe>("/recipes", json("POST", draft)),
   updateRecipe: (id: string, draft: RecipeDraft) => request<Recipe>(`/recipes/${id}`, json("PUT", draft)),
   deleteRecipe: (id: string) => request<void>(`/recipes/${id}`, { method: "DELETE" }),
+  /** Estimate every ingredient's nutrition again and return the recipe with fresh macros. */
+  recalculateMacros: (id: string) => request<Recipe>(`/recipes/${id}/macros`, { method: "POST" }, AI_TIMEOUT_MS),
   /** One recipe from several screenshots, in order. Images are shrunk first to keep uploads fast. */
   importImages: async (files: File[]) => {
     const form = new FormData();

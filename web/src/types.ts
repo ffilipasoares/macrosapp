@@ -33,3 +33,6 @@ export const PROTEINS = [
 ];
 
 export const UNITS = ["", "g", "kg", "ml", "l", "tsp", "tbsp", "cup", "clove", "can", "slice", "bunch", "pinch", "pack"];
+
+export type Macros = Schemas["Macros"];
+export type ReferencePortion = Schemas["ReferencePortion"];

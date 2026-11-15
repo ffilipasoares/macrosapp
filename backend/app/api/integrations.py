@@ -42,9 +42,14 @@ class Spoken(BaseModel):
 
 
 def _save_for_review(
-    repo: Repo, household_id: str, draft: RecipeDraft, web: object | None = None
+    repo: Repo,
+    household_id: str,
+    draft: RecipeDraft,
+    ai: object | None = None,
+    web: object | None = None,
 ) -> Spoken:
     recipe = Recipe(**draft.model_dump(), needs_review=True)
+    services.fill_nutrition(ai, recipe)  # type: ignore[arg-type]
     if web is not None:
         keep_own_copy(web.images, web.read_image, household_id, recipe)  # type: ignore[attr-defined]
     repo.save_recipe(household_id, recipe)
@@ -71,7 +76,7 @@ async def share_recipe_images(
     """Share sheet: read one or more screenshots and save the recipe, flagged for review."""
     images = await read_images(all_files(files, file))
     draft = ai_call(lambda: ai.recipe_from_images(images))
-    return _save_for_review(repo, household.id, draft)
+    return _save_for_review(repo, household.id, draft, ai)
 
 
 @router.post("/shortcuts/recipe-video")
@@ -85,7 +90,7 @@ async def share_recipe_video(
     """Share sheet: watch a saved cooking video and save the recipe, flagged for review."""
     data, mime_type = await read_video(file)
     draft = ai_call(lambda: ai.recipe_from_video(data, mime_type, caption))
-    return _save_for_review(repo, household.id, draft)
+    return _save_for_review(repo, household.id, draft, ai)
 
 
 @router.post("/shortcuts/recipe-audio")
@@ -95,7 +100,7 @@ async def share_recipe_audio(
     """Share sheet or "Hey Siri": a spoken recipe, saved for review."""
     data, mime_type = await read_audio(file)
     draft = ai_call(lambda: ai.recipe_from_audio(data, mime_type))
-    return _save_for_review(repo, household.id, draft)
+    return _save_for_review(repo, household.id, draft, ai)
 
 
 @router.post("/shortcuts/recipe-link")
@@ -109,7 +114,7 @@ def share_recipe_link(
 ) -> Spoken:
     """Share sheet: read a TikTok caption or recipe page and save it, flagged for review."""
     draft = import_link(ai, get_link_reader(request), body.url)
-    return _save_for_review(repo, household.id, draft, web)
+    return _save_for_review(repo, household.id, draft, ai, web)
 
 
 @router.post("/jobs/weekly-plan", dependencies=[Depends(scheduler_only)])

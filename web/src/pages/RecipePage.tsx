@@ -2,22 +2,43 @@ import { ArrowLeft, Camera, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
+import { MacrosCard } from "../components/MacrosCard";
 import { ErrorNote, Loading, Thumb, messageOf, primaryButton, quietButton } from "../components/ui";
 import { deleteRecipePhoto, uploadRecipePhoto } from "../lib/photos";
 import { lastCookedLabel, proteinStyle } from "../lib/style";
 import { useMe } from "../session";
 import { formatQuantity } from "../lib/weeks";
-import { AISLES, PROTEINS, UNITS, type Ingredient, type Recipe, type RecipeDraft } from "../types";
+import { AISLES, PROTEINS, UNITS, type Ingredient, type Recipe, type RecipeDraft, type ReferencePortion } from "../types";
 
 /** Read view: what you look at while cooking. */
 export function RecipePage() {
   const { id } = useParams();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reference, setReference] = useState<ReferencePortion | undefined>(undefined);
+  const [calculating, setCalculating] = useState(false);
 
   useEffect(() => {
     api.getRecipe(id!).then(setRecipe).catch((e) => setError(messageOf(e)));
   }, [id]);
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((settings) => setReference(settings.reference_portion))
+      .catch(() => setReference(undefined));
+  }, []);
+
+  async function calculate() {
+    setCalculating(true);
+    setError(null);
+    try {
+      setRecipe(await api.recalculateMacros(id!));
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setCalculating(false);
+    }
+  }
 
   if (!recipe) {
     return (
@@ -61,6 +82,9 @@ export function RecipePage() {
             ))}
           </div>
         </header>
+
+        <ErrorNote message={error} />
+        <MacrosCard macros={recipe.macros} servings={recipe.servings ?? 1} reference={reference} onCalculate={calculate} calculating={calculating} />
 
         {recipe.needs_review && (
           <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">

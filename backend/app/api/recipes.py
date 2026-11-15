@@ -5,8 +5,9 @@ from collections.abc import Callable
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
+from app import services
 from app.ai.base import AIError, RecipeAI
-from app.deps import AIDep, CurrentHousehold, RepoDep, WebDep
+from app.deps import AIDep, CurrentHousehold, OptionalAIDep, RepoDep, WebDep
 from app.images import keep_own_copy
 from app.links import LinkContent, LinkError
 from app.models import Recipe, RecipeDraft
@@ -132,9 +133,14 @@ def list_recipes(household: CurrentHousehold, repo: RepoDep) -> list[Recipe]:
 
 @router.post("", status_code=201)
 def create_recipe(
-    draft: RecipeDraft, household: CurrentHousehold, repo: RepoDep, web: WebDep
+    draft: RecipeDraft,
+    household: CurrentHousehold,
+    repo: RepoDep,
+    web: WebDep,
+    ai: OptionalAIDep,
 ) -> Recipe:
     recipe = Recipe(**draft.model_dump())
+    services.fill_nutrition(ai, recipe)
     # A photo from a web page or TikTok is copied, so it keeps working.
     keep_own_copy(web.images, web.read_image, household.id, recipe)
     repo.save_recipe(household.id, recipe)
@@ -151,7 +157,12 @@ def get_recipe(recipe_id: str, household: CurrentHousehold, repo: RepoDep) -> Re
 
 @router.put("/{recipe_id}")
 def update_recipe(
-    recipe_id: str, draft: RecipeDraft, household: CurrentHousehold, repo: RepoDep, web: WebDep
+    recipe_id: str,
+    draft: RecipeDraft,
+    household: CurrentHousehold,
+    repo: RepoDep,
+    web: WebDep,
+    ai: OptionalAIDep,
 ) -> Recipe:
     existing = repo.get_recipe(household.id, recipe_id)
     if existing is None:
@@ -159,10 +170,22 @@ def update_recipe(
     # Saving an edit counts as reviewing it.
     recipe = existing.model_copy(update={**draft.model_dump(), "needs_review": False})
     recipe = Recipe.model_validate(recipe.model_dump())
+    services.fill_nutrition(ai, recipe, previous=existing)
     if recipe.image_url != existing.image_url:
         keep_own_copy(web.images, web.read_image, household.id, recipe)
     repo.save_recipe(household.id, recipe)
     return recipe
+
+
+@router.post("/{recipe_id}/macros")
+def recalculate_macros(
+    recipe_id: str, household: CurrentHousehold, repo: RepoDep, ai: AIDep
+) -> Recipe:
+    """Estimate the nutrition of every ingredient again."""
+    try:
+        return services.recalculate_macros(repo, ai, household.id, recipe_id)
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
 
 
 @router.delete("/{recipe_id}", status_code=204)

@@ -21,7 +21,9 @@ import {
 } from "../components/ui";
 import { DAY_COLORS, ease, lastCookedLabel, proteinStyle } from "../lib/style";
 import { DAYS, MEALS, addWeeks, defaultWeekId, formatQuantity, isWeekId, weekLabel, weekRange } from "../lib/weeks";
-import type { Alternative, Plan, PlanMeal, Rule, Settings } from "../types";
+import { MacrosCard } from "../components/MacrosCard";
+import { perPortion } from "../lib/macros";
+import type { Alternative, Plan, PlanMeal, ReferencePortion, Rule, Settings } from "../types";
 
 export function PlanPage() {
   const { weekId } = useParams();
@@ -163,7 +165,13 @@ export function PlanPage() {
                       </div>
                       <div className="flex min-w-0 flex-col gap-1">
                         {slots.map((slot) => (
-                          <MealRow key={slot.key} name={slot.name} meal={meals[slot.key]} onOpen={() => setOpenSlot(slot.key)} />
+                          <MealRow
+                            key={slot.key}
+                            name={slot.name}
+                            meal={meals[slot.key]}
+                            reference={settings?.reference_portion}
+                            onOpen={() => setOpenSlot(slot.key)}
+                          />
                         ))}
                       </div>
                     </li>
@@ -203,6 +211,7 @@ export function PlanPage() {
           slot={openSlot}
           meal={meals[openSlot] ?? null}
           today={today}
+          reference={settings?.reference_portion}
           onChanged={(updated) => {
             setPlan(updated);
             setListCount(null);
@@ -268,7 +277,17 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
   );
 }
 
-function MealRow({ name, meal, onOpen }: { name: string; meal: PlanMeal | undefined; onOpen: () => void }) {
+function MealRow({
+  name,
+  meal,
+  reference,
+  onOpen,
+}: {
+  name: string;
+  meal: PlanMeal | undefined;
+  reference?: ReferencePortion;
+  onOpen: () => void;
+}) {
   if (!meal) {
     return (
       <button
@@ -295,6 +314,7 @@ function MealRow({ name, meal, onOpen }: { name: string; meal: PlanMeal | undefi
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">
           <ProteinDot protein={meal.recipe.protein} />
           <span>{meal.portions} portions</span>
+          {meal.recipe.macros ? <span>{perPortion(meal.recipe.macros, meal.recipe.servings ?? 1, reference).kcal} kcal</span> : null}
           {meal.is_new ? <NewIdea /> : null}
         </span>
       </span>
@@ -325,6 +345,7 @@ function MealScreen({
   slot,
   meal,
   today,
+  reference,
   onChanged,
   onClose,
 }: {
@@ -332,6 +353,7 @@ function MealScreen({
   slot: string;
   meal: PlanMeal | null;
   today: Date;
+  reference?: ReferencePortion;
   onChanged: (plan: Plan) => void;
   onClose: () => void;
 }) {
@@ -417,6 +439,8 @@ function MealScreen({
         </header>
 
         <ErrorNote message={error} />
+
+        <MacrosCard macros={recipe.macros} servings={recipe.servings ?? 1} reference={reference} />
 
         <section className="flex items-center justify-between gap-4 border-y border-line py-4">
           <div className="min-w-0">

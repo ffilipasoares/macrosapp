@@ -67,7 +67,20 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
         settings.max_repeat_ratio,
     )
     open_slots = [slot for slot in cook_slots if slot not in plan.meals]
-    return PlanOut(**plan.model_dump(), rule_status=statuses, open_slots=open_slots)
+    out = PlanOut(**plan.model_dump(), rule_status=statuses, open_slots=open_slots)
+
+    # Meals are copies of recipes taken when planned. If macros were worked out since,
+    # show them, as long as the ingredients are still the same.
+    library = {recipe.id: recipe for recipe in repo.list_recipes(household_id)}
+    for meal in out.meals.values():
+        saved = library.get(meal.recipe.id)
+        same = saved is not None and [(i.name, i.unit, i.quantity) for i in saved.ingredients] == [
+            (i.name, i.unit, i.quantity) for i in meal.recipe.ingredients
+        ]
+        if same and meal.recipe.macros is None and saved.macros is not None:
+            meal.recipe.ingredients = saved.ingredients
+            meal.recipe.refresh_macros()
+    return out
 
 
 def _fill_with_suggestions(
@@ -241,7 +254,11 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
 
 
 def approve_plan(
-    repo: Repo, household_id: str, week_id: str, web: Web | None = None
+    repo: Repo,
+    household_id: str,
+    week_id: str,
+    web: Web | None = None,
+    ai: RecipeAI | None = None,
 ) -> tuple[WeekPlan, int]:
     """Lock in the plan and turn it into grocery items. Safe to run more than once."""
     plan = repo.get_plan(household_id, week_id)
@@ -276,7 +293,8 @@ def approve_plan(
             stored = meal.recipe
             if web is not None:
                 keep_own_copy(web.images, web.read_image, household_id, stored)
-                meal.recipe.image_url = stored.image_url
+            fill_nutrition(ai, stored)
+            meal.recipe = stored.model_copy(deep=True)
         if (stored.last_planned_week or "") < week_id:
             stored.last_planned_week = week_id
         repo.save_recipe(household_id, stored)
@@ -346,3 +364,38 @@ def run_weekly_job(
             log.exception("Weekly plan failed for household %s", household.id)
             summary["failed"] += 1
     return summary
+
+
+def fill_nutrition(ai: RecipeAI | None, recipe: Recipe, previous: Recipe | None = None) -> None:
+    """Give every ingredient a nutrition estimate and work out the recipe's macros.
+
+    Estimates sent by the app are not trusted: they are kept from the saved recipe
+    for ingredients whose name and unit did not change, and asked of the AI for new
+    or renamed ones. Amounts can change freely, since estimates are per unit.
+    A failed estimate never blocks saving; the macros then list what is missing.
+    """
+    known = {}
+    for ingredient in previous.ingredients if previous else []:
+        if ingredient.nutrition is not None:
+            known[(ingredient.name, ingredient.unit)] = ingredient.nutrition
+    for ingredient in recipe.ingredients:
+        ingredient.nutrition = known.get((ingredient.name, ingredient.unit))
+
+    unknown = [i for i in recipe.ingredients if i.nutrition is None and i.quantity is not None]
+    if ai is not None and unknown:
+        try:
+            for ingredient, estimate in zip(unknown, ai.estimate_nutrition(unknown), strict=False):
+                ingredient.nutrition = estimate
+        except AIError as error:
+            log.warning("Could not estimate nutrition for %r: %s", recipe.title, error)
+    recipe.refresh_macros()
+
+
+def recalculate_macros(repo: Repo, ai: RecipeAI, household_id: str, recipe_id: str) -> Recipe:
+    """Estimate every ingredient again, for example after changing several of them."""
+    recipe = repo.get_recipe(household_id, recipe_id)
+    if recipe is None:
+        raise NotFound("Recipe not found")
+    fill_nutrition(ai, recipe)
+    repo.save_recipe(household_id, recipe)
+    return recipe

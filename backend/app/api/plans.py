@@ -69,9 +69,11 @@ def alternatives(
 
 
 @router.post("/{week_id}/approve")
-def approve(week_id: str, household: CurrentHousehold, repo: RepoDep, web: WebDep) -> ApproveResult:
+def approve(
+    week_id: str, household: CurrentHousehold, repo: RepoDep, web: WebDep, ai: OptionalAIDep
+) -> ApproveResult:
     try:
-        plan, count = services.approve_plan(repo, household.id, _week(week_id), web)
+        plan, count = services.approve_plan(repo, household.id, _week(week_id), web, ai)
     except services.NotFound as error:
         raise HTTPException(404, str(error)) from error
     return ApproveResult(plan=services.plan_out(repo, household.id, plan), grocery_items=count)

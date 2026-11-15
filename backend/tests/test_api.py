@@ -109,7 +109,8 @@ def test_recipe_crud_normalises_ingredients(ctx):
         headers=auth(),
     ).json()
     assert created["protein"] == "fish"
-    assert created["ingredients"][0] == {
+    first = created["ingredients"][0]
+    assert {key: first[key] for key in ("name", "quantity", "unit", "aisle")} == {
         "name": "red onion", "quantity": 2.0, "unit": "", "aisle": "produce",
     }  # fmt: skip
 
@@ -245,6 +246,8 @@ def test_empty_library_is_filled_with_suggestions_and_kept_on_approval(ctx):
     assert len(saved) == 9 and all(recipe["last_planned_week"] == WEEK for recipe in saved)
     # Once saved, each photo is our own copy, so it keeps working.
     assert all(recipe["image_url"].startswith("https://images.test/") for recipe in saved)
+    # ...and its macros are worked out as it joins the library.
+    assert all(recipe["macros"] and recipe["macros"]["kcal"] > 0 for recipe in saved)
 
 
 def test_without_ai_a_small_library_leaves_open_slots():

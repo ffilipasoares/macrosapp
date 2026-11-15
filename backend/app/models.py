@@ -7,6 +7,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.core.ingredients import guess_aisle, normalize_name, normalize_unit
+from app.core.nutrition import recipe_totals
 from app.core.weeks import SLOT_KEYS
 
 Aisle = Literal[
@@ -43,11 +44,33 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
+class IngredientNutrition(BaseModel):
+    """An estimate for one ingredient: the weight of one unit, and macros per 100 g."""
+
+    grams_per_unit: float | None = Field(default=None, ge=0, le=10000)
+    kcal_per_100g: float = Field(ge=0, le=1000)
+    protein_per_100g: float = Field(ge=0, le=100)
+    carbs_per_100g: float = Field(ge=0, le=100)
+    fat_per_100g: float = Field(ge=0, le=100)
+
+
+class Macros(BaseModel):
+    """Totals for the whole recipe as written. The app divides them into portions."""
+
+    kcal: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    weight_g: float
+    missing: list[str] = Field(default_factory=list)
+
+
 class Ingredient(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     quantity: float | None = Field(default=None, ge=0)
     unit: str = Field(default="", max_length=20)
     aisle: Aisle = "other"
+    nutrition: IngredientNutrition | None = None
 
     @field_validator("name")
     @classmethod
@@ -84,6 +107,17 @@ class RecipeDraft(BaseModel):
     # A photo: uploaded to Firebase Storage by the app, or taken from the recipe's web page.
     image_url: str | None = Field(default=None, max_length=2000)
     original_language: str = "en"
+    # Worked out from the ingredients every time a recipe is built; never set by hand.
+    macros: Macros | None = None
+
+    @model_validator(mode="after")
+    def _work_out_macros(self) -> "RecipeDraft":
+        self.refresh_macros()
+        return self
+
+    def refresh_macros(self) -> None:
+        totals = recipe_totals(self.ingredients)
+        self.macros = Macros(**totals) if totals else None
 
     @field_validator("image_url")
     @classmethod
@@ -140,6 +174,13 @@ def default_slots() -> dict[str, SlotSetting]:
     }
 
 
+class ReferencePortion(BaseModel):
+    """What "one portion" means when showing macros."""
+
+    kind: Literal["serving", "grams"] = "serving"
+    grams: int = Field(default=400, ge=50, le=2000)
+
+
 class Settings(BaseModel):
     slots: dict[str, SlotSetting] = Field(default_factory=default_slots)
     rules: list[Rule] = Field(default_factory=list)
@@ -147,6 +188,7 @@ class Settings(BaseModel):
     repeat_window_weeks: int = Field(default=2, ge=0, le=8)
     max_repeat_ratio: float = Field(default=0.2, ge=0, le=1)
     timezone: str = "Europe/Lisbon"
+    reference_portion: ReferencePortion = Field(default_factory=ReferencePortion)
 
     @model_validator(mode="after")
     def _complete_slots(self) -> "Settings":

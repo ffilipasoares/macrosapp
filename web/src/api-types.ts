@@ -507,6 +507,23 @@ export interface components {
              * @enum {string}
              */
             aisle: "produce" | "meat_fish" | "dairy_eggs" | "bakery" | "pantry" | "frozen" | "drinks" | "household" | "other";
+            nutrition?: components["schemas"]["IngredientNutrition"] | null;
+        };
+        /**
+         * IngredientNutrition
+         * @description An estimate for one ingredient: the weight of one unit, and macros per 100 g.
+         */
+        IngredientNutrition: {
+            /** Grams Per Unit */
+            grams_per_unit?: number | null;
+            /** Kcal Per 100G */
+            kcal_per_100g: number;
+            /** Protein Per 100G */
+            protein_per_100g: number;
+            /** Carbs Per 100G */
+            carbs_per_100g: number;
+            /** Fat Per 100G */
+            fat_per_100g: number;
         };
         /** ItemText */
         ItemText: {
@@ -528,6 +545,24 @@ export interface components {
             shortcut_token: string;
             /** Push Devices */
             push_devices: number;
+        };
+        /**
+         * Macros
+         * @description Totals for the whole recipe as written. The app divides them into portions.
+         */
+        Macros: {
+            /** Kcal */
+            kcal: number;
+            /** Protein G */
+            protein_g: number;
+            /** Carbs G */
+            carbs_g: number;
+            /** Fat G */
+            fat_g: number;
+            /** Weight G */
+            weight_g: number;
+            /** Missing */
+            missing?: string[];
         };
         /** MealChange */
         MealChange: {
@@ -609,6 +644,7 @@ export interface components {
              * @default en
              */
             original_language: string;
+            macros?: components["schemas"]["Macros"] | null;
             /** Id */
             id?: string;
             /**
@@ -658,6 +694,24 @@ export interface components {
              * @default en
              */
             original_language: string;
+            macros?: components["schemas"]["Macros"] | null;
+        };
+        /**
+         * ReferencePortion
+         * @description What "one portion" means when showing macros.
+         */
+        ReferencePortion: {
+            /**
+             * Kind
+             * @default serving
+             * @enum {string}
+             */
+            kind: "serving" | "grams";
+            /**
+             * Grams
+             * @default 400
+             */
+            grams: number;
         };
         /**
          * Rule
@@ -721,6 +775,7 @@ export interface components {
              * @default Europe/Lisbon
              */
             timezone: string;
+            reference_portion?: components["schemas"]["ReferencePortion"];
         };
         /** SiriItem */
         SiriItem: {

@@ -1,7 +1,7 @@
 """Canned AI responses for local development and tests. Never used in production."""
 
 from app.ai.base import AIError
-from app.models import Ingredient, RecipeDraft
+from app.models import Ingredient, IngredientNutrition, RecipeDraft
 
 _SAMPLE = RecipeDraft(
     title="Lemon herb chicken traybake",
@@ -59,6 +59,23 @@ class FakeRecipeAI:
         return _SAMPLE.model_copy(
             deep=True, update={"title": first_line, "source_url": source_url, "protein": protein}
         )
+
+    def estimate_nutrition(self, ingredients: list[Ingredient]) -> list[IngredientNutrition | None]:
+        self.calls.append(("nutrition", [item.name for item in ingredients]))
+        weights = {"": 100.0, "tbsp": 13.5, "tsp": 4.5, "clove": 5.0, "can": 400.0, "cup": 200.0,
+                   "ml": 1.0, "l": 1000.0, "slice": 30.0}  # fmt: skip
+        return [
+            None
+            if "unknown" in item.name
+            else IngredientNutrition(
+                grams_per_unit=weights.get(item.unit, 50.0),
+                kcal_per_100g=200.0,
+                protein_per_100g=20.0,
+                carbs_per_100g=10.0,
+                fat_per_100g=8.0,
+            )
+            for item in ingredients
+        ]
 
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
         slug = "-".join(query.lower().split())

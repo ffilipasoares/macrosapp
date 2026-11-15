@@ -19,6 +19,7 @@ Google Cloud.
 | Stop writing grocery lists | Merges all ingredients of the approved plan into one list, grouped by aisle, minus what you always have |
 | Add things during the week | Type them in, or say "Hey Siri, add to groceries" |
 | Save a recipe you saw | Reads it from one or several screenshots, a TikTok or recipe link, a saved cooking video, or pasted text; translates it to English; lets you check it before saving |
+| Know what you eat | Shows calories, protein, carbs and fat per portion for every recipe and planned meal; you choose in Settings whether a portion is one serving or a fixed weight (e.g. 400 g) |
 | Keep recipes recognisable | Add a photo to any recipe; recipes from websites bring their own photo |
 | Capture a recipe by talking | Record yourself describing it; it is transcribed and turned into a recipe |
 

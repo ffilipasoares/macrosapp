@@ -14,7 +14,7 @@ from google.genai import types
 from pydantic import BaseModel, ValidationError
 
 from app.ai.base import AIError
-from app.models import Aisle, Ingredient, RecipeDraft
+from app.models import Aisle, Ingredient, IngredientNutrition, RecipeDraft
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +72,19 @@ class _AiRecipe(BaseModel):
     prep_minutes: int | None
     original_language: str
     source_url: str | None
+
+
+class _AiNutrition(BaseModel):
+    index: int
+    grams_per_unit: float | None
+    kcal_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+
+
+class _AiNutritionList(BaseModel):
+    items: list[_AiNutrition]
 
 
 def _to_draft(recipe: _AiRecipe) -> RecipeDraft:
@@ -204,6 +217,36 @@ class GeminiRecipeAI:
         if source_url and not draft.source_url:
             draft.source_url = source_url
         return draft
+
+    def estimate_nutrition(self, ingredients: list[Ingredient]) -> list[IngredientNutrition | None]:
+        lines = "\n".join(
+            f"{index}. {'' if item.quantity is None else f'{item.quantity:g}'} "
+            f"{item.unit or '(counted whole)'} {item.name}"
+            for index, item in enumerate(ingredients)
+        )
+        prompt = (
+            "For each numbered ingredient below, estimate typical nutrition for the raw "
+            "ingredient as bought, using standard food composition data (such as USDA).\n"
+            "- grams_per_unit: the weight in grams of ONE of the stated unit. For example "
+            "1 medium onion = 150, 1 tbsp olive oil = 13.5, 1 clove garlic = 5, 1 can chopped "
+            "tomatoes = 400, 1 ml milk = 1.03. Use null only if it cannot be estimated.\n"
+            "- kcal_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g: per 100 g of "
+            "the ingredient.\n"
+            "Answer for every index, in the same order.\n\n" + lines
+        )
+        result = self._structured([prompt], _AiNutritionList, "nutrition")
+        estimates: list[IngredientNutrition | None] = [None] * len(ingredients)
+        for item in result.items:
+            if 0 <= item.index < len(ingredients):
+                try:
+                    estimates[item.index] = IngredientNutrition(
+                        **item.model_dump(exclude={"index"})
+                    )
+                except ValidationError:
+                    log.warning(
+                        "Dropped an implausible estimate for %r", ingredients[item.index].name
+                    )
+        return estimates
 
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
         """Addresses of recipe pages that Google Search really returned.

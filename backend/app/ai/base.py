@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from app.models import RecipeDraft
+from app.models import Ingredient, IngredientNutrition, RecipeDraft
 
 
 class AIError(Exception):
@@ -24,6 +24,10 @@ class RecipeAI(Protocol):
 
     def recipe_from_text(self, text: str, source_url: str | None = None) -> RecipeDraft:
         """Structure a recipe given as free text, in any language."""
+        ...
+
+    def estimate_nutrition(self, ingredients: list[Ingredient]) -> list[IngredientNutrition | None]:
+        """For each ingredient, in order: the weight of one unit and macros per 100 g."""
         ...
 
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:

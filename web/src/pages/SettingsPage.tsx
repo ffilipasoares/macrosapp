@@ -40,6 +40,11 @@ export function SettingsPage() {
   const rules = settings.rules ?? [];
   const staples = settings.staples ?? [];
   const cooked = Object.values(slots).filter((slot) => slot.cook).length;
+  const reference = settings.reference_portion ?? { kind: "serving" as const, grams: 400 };
+  const portionChoices = [
+    { kind: "serving" as const, title: "One serving", body: "The recipe divided by how many it serves" },
+    { kind: "grams" as const, title: "A fixed weight", body: "The same amount of food for every recipe" },
+  ];
 
   function change(changes: Partial<Settings>) {
     setSettings({ ...settings!, ...changes });
@@ -189,6 +194,51 @@ export function SettingsPage() {
                 </select>
               </div>
             </div>
+          </Section>
+
+          <Section title="Macros portion" note="Macros are shown for one portion. Choose what one portion means.">
+            <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Reference portion">
+              {portionChoices.map((choice) => {
+                const on = reference.kind === choice.kind;
+                return (
+                  <button
+                    key={choice.kind}
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => change({ reference_portion: { ...reference, kind: choice.kind } })}
+                    className={`flex flex-col gap-0.5 rounded-2xl p-3 text-left transition-colors duration-150 ease-out ${
+                      on ? "bg-ink text-paper" : "bg-card text-ink ring-1 ring-line hover:ring-ink-soft"
+                    }`}
+                  >
+                    <span className="font-semibold">{choice.title}</span>
+                    <span className={`text-xs ${on ? "text-paper/80" : "text-ink-soft"}`}>{choice.body}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {reference.kind === "grams" ? (
+              <div className="flex items-center gap-3">
+                <label htmlFor="portion-grams" className="font-medium">
+                  One portion is
+                </label>
+                <input
+                  id="portion-grams"
+                  type="number"
+                  inputMode="numeric"
+                  min={50}
+                  max={2000}
+                  step={10}
+                  value={reference.grams}
+                  onChange={(e) => change({ reference_portion: { ...reference, grams: Number(e.target.value) || 0 } })}
+                  onBlur={() => change({ reference_portion: { ...reference, grams: Math.min(2000, Math.max(50, reference.grams || 400)) } })}
+                  className="field w-28 text-right tabular-nums"
+                />
+                <span className="font-medium">g</span>
+              </div>
+            ) : null}
+            {reference.kind === "grams" ? (
+              <p className="text-xs text-ink-soft">Based on the raw weight of the ingredients, so cooked food that loses water will be a little lighter.</p>
+            ) : null}
           </Section>
 
           <Section title="Always in the house" note="Ingredients you never need on the generated list, such as salt or olive oil.">
