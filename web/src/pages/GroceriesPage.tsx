@@ -1,37 +1,79 @@
 import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
-import { ErrorNote, Loading } from "../components/ui";
+import { ErrorNote, Loading, messageOf } from "../components/ui";
 import { db } from "../firebase";
 import { AISLE_STYLE, ease } from "../lib/style";
 import { formatQuantity } from "../lib/weeks";
 import { useMe } from "../session";
 import type { GroceryItem } from "../types";
 
+/** How long to wait for the live connection before loading the list through the backend. */
+const LIVE_WAIT_MS = 8000;
+
 /**
  * The one screen that talks to Firestore directly: changes appear on the other
  * phone straight away, and ticking works with no signal and syncs later.
+ * If that live connection can't be made, the list is loaded and changed through
+ * the backend instead, so it always opens.
  */
 export function GroceriesPage() {
   const { household_id: householdId } = useMe();
   const [items, setItems] = useState<GroceryItem[] | null>(null);
+  const [live, setLive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [adding, setAdding] = useState(false);
 
   const groceries = useMemo(() => collection(db, "households", householdId, "groceries"), [householdId]);
 
-  useEffect(
-    () =>
-      onSnapshot(
-        groceries,
-        (snapshot) => setItems(snapshot.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id }))),
-        () => setError("The grocery list could not be loaded. Check your connection and reload."),
-      ),
-    [groceries],
-  );
+  const loadThroughBackend = useCallback(async () => {
+    try {
+      setItems(await api.listGroceries());
+      setLive(false);
+    } catch (e) {
+      setError(messageOf(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    let gotLive = false;
+    const fallback = window.setTimeout(() => {
+      if (!gotLive) void loadThroughBackend();
+    }, LIVE_WAIT_MS);
+    const stop = onSnapshot(
+      groceries,
+      (snapshot) => {
+        gotLive = true;
+        window.clearTimeout(fallback);
+        setLive(true);
+        setError(null);
+        setItems(snapshot.docs.map((d) => ({ ...(d.data() as GroceryItem), id: d.id })));
+      },
+      (failure) => {
+        console.error("Live grocery list failed", failure);
+        window.clearTimeout(fallback);
+        void loadThroughBackend();
+      },
+    );
+    return () => {
+      window.clearTimeout(fallback);
+      stop();
+    };
+  }, [groceries, loadThroughBackend]);
+
+  /** Without the live connection, changes go through the backend and the list is reloaded. */
+  async function viaBackend(work: () => Promise<unknown>) {
+    setError(null);
+    try {
+      await work();
+    } catch (e) {
+      setError(messageOf(e));
+    }
+    await loadThroughBackend();
+  }
 
   async function add(event: React.FormEvent) {
     event.preventDefault();
@@ -41,9 +83,10 @@ export function GroceriesPage() {
     setError(null);
     try {
       await api.addGroceries(value); // the server sorts it into an aisle and skips duplicates
+      if (!live) await loadThroughBackend();
     } catch (e) {
-      if (e instanceof ApiError && e.status !== 0) {
-        setError(e.message);
+      if ((e instanceof ApiError && e.status !== 0) || !live) {
+        setError(messageOf(e));
         setAdding(false);
         return;
       }
@@ -65,8 +108,12 @@ export function GroceriesPage() {
     setAdding(false);
   }
 
-  const toggle = (item: GroceryItem) => void updateDoc(doc(groceries, item.id), { checked: !item.checked });
-  const remove = (item: GroceryItem) => void deleteDoc(doc(groceries, item.id));
+  const toggle = (item: GroceryItem) =>
+    live
+      ? void updateDoc(doc(groceries, item.id as string), { checked: !item.checked })
+      : void viaBackend(() => api.setGroceryChecked(item.id as string, !item.checked));
+  const remove = (item: GroceryItem) =>
+    live ? void deleteDoc(doc(groceries, item.id as string)) : void viaBackend(() => api.deleteGrocery(item.id as string));
 
   const all = items ?? [];
   const waiting = all.filter((item) => !item.checked);
@@ -74,8 +121,12 @@ export function GroceriesPage() {
   const pct = all.length ? Math.round((basket.length / all.length) * 100) : 0;
 
   function clearBasket() {
+    if (!live) {
+      void viaBackend(() => api.clearCheckedGroceries());
+      return;
+    }
     const batch = writeBatch(db);
-    basket.forEach((item) => batch.delete(doc(groceries, item.id)));
+    basket.forEach((item) => batch.delete(doc(groceries, item.id as string)));
     void batch.commit();
   }
 
@@ -114,6 +165,12 @@ export function GroceriesPage() {
           </button>
         </form>
         <ErrorNote message={error} />
+        {items && !live ? (
+          <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">
+            Live sync isn't connecting on this network, so the list is loaded through the server. Changes from the other phone appear when you
+            reopen this page.
+          </p>
+        ) : null}
 
         {!items ? (
           <Loading label="Loading the list" />

@@ -10,16 +10,27 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+const DEFAULT_TIMEOUT_MS = 45_000;
+/** Reading a video, a recording or several screenshots takes longer. */
+const AI_TIMEOUT_MS = 120_000;
+
+async function request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const token = await auth.currentUser?.getIdToken();
   const headers: Record<string, string> = { Authorization: `Bearer ${token ?? ""}` };
   if (typeof init.body === "string") headers["Content-Type"] = "application/json";
 
+  // Never leave a button spinning: give up after a while and say so.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
-    response = await fetch(`/api${path}`, { ...init, headers });
+    response = await fetch(`/api${path}`, { ...init, headers, signal: controller.signal });
   } catch {
-    throw new ApiError(0, "You seem to be offline. Try again when you have a connection.");
+    throw controller.signal.aborted
+      ? new ApiError(0, "The server took too long to answer. Check your connection and try again.")
+      : new ApiError(0, "You seem to be offline. Try again when you have a connection.");
+  } finally {
+    clearTimeout(timer);
   }
   if (!response.ok) {
     let message = "Something went wrong. Try again.";
@@ -52,25 +63,26 @@ export const api = {
   importImages: async (files: File[]) => {
     const form = new FormData();
     for (const file of files) form.append("files", await shrinkImage(file));
-    return request<RecipeDraft>("/recipes/import/image", { method: "POST", body: form });
+    return request<RecipeDraft>("/recipes/import/image", { method: "POST", body: form }, AI_TIMEOUT_MS);
   },
   importVideo: (file: File, caption = "") => {
     const form = new FormData();
     form.append("file", file);
     if (caption.trim()) form.append("caption", caption.trim());
-    return request<RecipeDraft>("/recipes/import/video", { method: "POST", body: form });
+    return request<RecipeDraft>("/recipes/import/video", { method: "POST", body: form }, AI_TIMEOUT_MS);
   },
   /** A recipe said out loud: recorded in the app or a voice memo. */
   importAudio: (file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return request<RecipeDraft>("/recipes/import/audio", { method: "POST", body: form });
+    return request<RecipeDraft>("/recipes/import/audio", { method: "POST", body: form }, AI_TIMEOUT_MS);
   },
-  importLink: (url: string) => request<RecipeDraft>("/recipes/import/link", json("POST", { url })),
-  importText: (text: string) => request<RecipeDraft>("/recipes/import/text", json("POST", { text })),
+  importLink: (url: string) => request<RecipeDraft>("/recipes/import/link", json("POST", { url }), AI_TIMEOUT_MS),
+  importText: (text: string) => request<RecipeDraft>("/recipes/import/text", json("POST", { text }), AI_TIMEOUT_MS),
 
   getPlan: (weekId: string) => request<Plan | null>(`/plans/${weekId}`),
-  generatePlan: (weekId: string) => request<Plan>(`/plans/${weekId}/generate`, { method: "POST" }),
+  // Generating can search the web for new recipes when the library is short.
+  generatePlan: (weekId: string) => request<Plan>(`/plans/${weekId}/generate`, { method: "POST" }, AI_TIMEOUT_MS),
   setMeal: (weekId: string, slot: string, change: { recipe_id: string | null; portions?: number }) =>
     request<Plan>(`/plans/${weekId}/meals/${slot}`, json("PUT", change)),
   alternatives: (weekId: string, slot: string) =>
@@ -79,6 +91,11 @@ export const api = {
     request<{ plan: Plan; grocery_items: number }>(`/plans/${weekId}/approve`, { method: "POST" }),
 
   addGroceries: (text: string) => request<GroceryItem[]>("/groceries", json("POST", { text })),
+  // Fallback for when the live Firestore connection cannot be made.
+  listGroceries: () => request<GroceryItem[]>("/groceries"),
+  setGroceryChecked: (id: string, checked: boolean) => request<void>(`/groceries/${id}`, json("PATCH", { checked })),
+  deleteGrocery: (id: string) => request<void>(`/groceries/${id}`, { method: "DELETE" }),
+  clearCheckedGroceries: () => request<void>("/groceries/clear-checked", { method: "POST" }),
   registerDevice: (token: string) => request<void>("/devices", json("POST", { token })),
 };
 

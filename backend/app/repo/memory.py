@@ -79,6 +79,17 @@ class MemoryRepo:
         for item in items:
             self.groceries[household_id][item.id] = item.model_copy()
 
+    def set_grocery_checked(self, household_id: str, item_id: str, checked: bool) -> bool:
+        item = self.groceries[household_id].get(item_id)
+        if item is None:
+            return False
+        item.checked = checked
+        return True
+
+    def delete_groceries(self, household_id: str, item_ids: list[str]) -> None:
+        for item_id in item_ids:
+            self.groceries[household_id].pop(item_id, None)
+
     def delete_plan_groceries(self, household_id: str, week_id: str) -> None:
         store = self.groceries[household_id]
         for item_id in [i for i, g in store.items() if g.source == "plan" and g.week_id == week_id]:

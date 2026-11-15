@@ -319,3 +319,43 @@ def test_weekly_job_drafts_next_week_once_and_notifies(ctx):
 
     ok = client.post("/api/jobs/weekly-plan", headers={"X-Job-Token": "job-secret"})
     assert ok.status_code == 200 and set(ok.json()) == {"generated", "skipped", "failed"}
+
+
+def test_grocery_fallback_routes_tick_remove_and_clear(ctx):
+    client, _, _ = ctx
+    added = client.post("/api/groceries", json={"text": "eggs, bread, milk"}, headers=auth()).json()
+    ids = {item["name"]: item["id"] for item in added}
+
+    assert (
+        client.patch(
+            f"/api/groceries/{ids['eggs']}", json={"checked": True}, headers=auth()
+        ).status_code
+        == 204
+    )
+    assert (
+        client.patch(
+            f"/api/groceries/{ids['bread']}", json={"checked": True}, headers=auth()
+        ).status_code
+        == 204
+    )
+    assert (
+        client.patch("/api/groceries/missing", json={"checked": True}, headers=auth()).status_code
+        == 404
+    )
+    assert client.delete(f"/api/groceries/{ids['milk']}", headers=auth()).status_code == 204
+    listed = {
+        item["name"]: item["checked"]
+        for item in client.get("/api/groceries", headers=auth()).json()
+    }
+    assert listed == {"eggs": True, "bread": True}
+
+    assert client.post("/api/groceries/clear-checked", headers=auth()).status_code == 204
+    assert client.get("/api/groceries", headers=auth()).json() == []
+    # Another household cannot touch these items.
+    other = client.post("/api/groceries", json={"text": "tea"}, headers=auth()).json()[0]["id"]
+    assert (
+        client.patch(
+            f"/api/groceries/{other}", json={"checked": True}, headers=auth("bruno")
+        ).status_code
+        == 404
+    )

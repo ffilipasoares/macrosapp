@@ -1,6 +1,6 @@
 """Account, settings, grocery adds and push registration for the signed-in household."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app import services
@@ -19,6 +19,10 @@ class Me(BaseModel):
 
 class ItemText(BaseModel):
     text: str = Field(min_length=1, max_length=300)
+
+
+class CheckedChange(BaseModel):
+    checked: bool
 
 
 class DeviceToken(BaseModel):
@@ -55,6 +59,30 @@ def list_groceries(household: CurrentHousehold, repo: RepoDep) -> list[GroceryIt
 def add_groceries(body: ItemText, household: CurrentHousehold, repo: RepoDep) -> list[GroceryItem]:
     """Add typed items. The server picks the aisle; ticking and deleting happen in Firestore."""
     return services.add_items_from_text(repo, household.id, body.text, "manual")
+
+
+# The app normally ticks and removes items straight in Firestore, for live sync and
+# offline use. These routes are its fallback when that connection cannot be made.
+
+
+@router.patch("/groceries/{item_id}", status_code=204)
+def set_checked(
+    item_id: str, body: CheckedChange, household: CurrentHousehold, repo: RepoDep
+) -> None:
+    if not repo.set_grocery_checked(household.id, item_id, body.checked):
+        raise HTTPException(404, "That item is no longer on the list")
+
+
+@router.delete("/groceries/{item_id}", status_code=204)
+def delete_item(item_id: str, household: CurrentHousehold, repo: RepoDep) -> None:
+    repo.delete_groceries(household.id, [item_id])
+
+
+@router.post("/groceries/clear-checked", status_code=204)
+def clear_checked(household: CurrentHousehold, repo: RepoDep) -> None:
+    """Remove everything already in the basket."""
+    ticked = [item.id for item in repo.list_groceries(household.id) if item.checked]
+    repo.delete_groceries(household.id, ticked)
 
 
 @router.post("/devices", status_code=204)

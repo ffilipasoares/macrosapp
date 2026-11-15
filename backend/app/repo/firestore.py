@@ -130,6 +130,21 @@ class FirestoreRepo:
                 batch.set(collection.document(item.id), item.model_dump(mode="json"))
             batch.commit()
 
+    def set_grocery_checked(self, household_id: str, item_id: str, checked: bool) -> bool:
+        ref = self._groceries(household_id).document(item_id)
+        if not ref.get().exists:
+            return False
+        ref.update({"checked": checked})
+        return True
+
+    def delete_groceries(self, household_id: str, item_ids: list[str]) -> None:
+        collection = self._groceries(household_id)
+        for start in range(0, len(item_ids), _BATCH_LIMIT):
+            batch = self.db.batch()
+            for item_id in item_ids[start : start + _BATCH_LIMIT]:
+                batch.delete(collection.document(item_id))
+            batch.commit()
+
     def delete_plan_groceries(self, household_id: str, week_id: str) -> None:
         query = self._groceries(household_id).where(filter=FieldFilter("week_id", "==", week_id))
         refs = [s.reference for s in query.stream() if s.get("source") == "plan"]

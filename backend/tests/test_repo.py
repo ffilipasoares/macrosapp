@@ -86,5 +86,12 @@ def test_settings_recipes_plans_and_groceries_round_trip(repo):
     repo.delete_plan_groceries(hid, "2026-11-16")
     assert sorted(item.name for item in repo.list_groceries(hid)) == ["leek", "oat milk"]
 
+    leek = next(item for item in repo.list_groceries(hid) if item.name == "leek")
+    assert repo.set_grocery_checked(hid, leek.id, True) is True
+    assert repo.set_grocery_checked(hid, "missing", True) is False
+    assert next(i for i in repo.list_groceries(hid) if i.id == leek.id).checked is True
+    repo.delete_groceries(hid, [leek.id])
+    assert [item.name for item in repo.list_groceries(hid)] == ["oat milk"]
+
     repo.delete_recipe(hid, recipe.id)
     assert repo.list_recipes(hid) == []
