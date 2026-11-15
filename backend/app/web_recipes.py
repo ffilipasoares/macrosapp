@@ -9,7 +9,7 @@ used when it has one.
 import logging
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 
 from app.ai.base import AIError, RecipeAI
 from app.links import LinkContent, LinkError
@@ -17,9 +17,11 @@ from app.models import RecipeDraft
 
 log = logging.getLogger(__name__)
 
-# Pages are checked several at a time, so a plan can be ready within the minute that
-# Firebase Hosting waits for an answer.
-PARALLEL_CHECKS = 8
+# All pages are opened and read at the same time, so the whole search fits in the
+# minute that Firebase Hosting waits for an answer.
+MAX_PAGES = 20
+# The start of a page is enough to find its recipe, and shorter is much faster to read.
+MAX_PAGE_CHARS = 8000
 
 
 def _check(ai: RecipeAI, read_link: Callable[[str], LinkContent], url: str) -> RecipeDraft | None:
@@ -32,7 +34,7 @@ def _check(ai: RecipeAI, read_link: Callable[[str], LinkContent], url: str) -> R
         log.warning("Skipped %s: unexpected error", url, exc_info=True)
         return None
     try:
-        draft = ai.recipe_from_text(content.text, source_url=content.url)
+        draft = ai.recipe_from_text(content.text[:MAX_PAGE_CHARS], source_url=content.url)
     except AIError as error:
         log.info("Skipped %s: %s", url, error)
         return None
@@ -54,32 +56,35 @@ def find_web_recipes(
 ) -> list[RecipeDraft]:
     """Up to ``count`` new recipes for ``query``, each from a page that was checked.
 
-    No new search or batch of checks starts after ``deadline`` (a ``time.monotonic()``
-    value), so the caller gets whatever was found in time.
+    One web search, then every page found is checked at the same time. Whatever is
+    ready by ``deadline`` (a ``time.monotonic()`` value) is returned.
     """
     if deadline is not None and time.monotonic() >= deadline:
         return []
-    urls = ai.find_recipe_links(query, count, avoid_titles)
+    urls = ai.find_recipe_links(query, count, avoid_titles)[:MAX_PAGES]
+    if not urls:
+        return []
+
+    pool = ThreadPoolExecutor(max_workers=len(urls))
+    futures = [pool.submit(_check, ai, read_link, url) for url in urls]
+    remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+    done, not_done = wait(futures, timeout=remaining)
+    if not_done:
+        log.info("%d of %d pages for %r were not ready in time", len(not_done), len(urls), query)
+    # Don't wait for slow pages: their answers are no longer needed.
+    pool.shutdown(wait=False, cancel_futures=True)
+
     avoid = {title.strip().lower() for title in avoid_titles}
     found: list[RecipeDraft] = []
     seen_pages: set[str] = set()
-
-    with ThreadPoolExecutor(max_workers=PARALLEL_CHECKS) as pool:
-        position = 0
-        while position < len(urls) and len(found) < count:
-            if deadline is not None and time.monotonic() >= deadline:
-                log.info("Stopped checking pages for %r: out of time", query)
-                break
-            # Check a few more pages than still needed, since some will not work.
-            batch = urls[position : position + max(PARALLEL_CHECKS, count - len(found) + 2)]
-            position += len(batch)
-            for draft in pool.map(lambda url: _check(ai, read_link, url), batch):
-                if draft is None or len(found) >= count:
-                    continue
-                key = draft.title.strip().lower()
-                if key in avoid or draft.source_url in seen_pages:
-                    continue
-                avoid.add(key)
-                seen_pages.add(draft.source_url or "")
-                found.append(draft)
+    for future in futures:  # in search order, so the best matches come first
+        draft = future.result() if future in done else None
+        if draft is None or len(found) >= count:
+            continue
+        key = draft.title.strip().lower()
+        if key in avoid or draft.source_url in seen_pages:
+            continue
+        avoid.add(key)
+        seen_pages.add(draft.source_url or "")
+        found.append(draft)
     return found

@@ -309,7 +309,7 @@ def test_plan_says_when_the_search_ran_out_of_time(monkeypatch):
         .post("/api/plans/2026-11-16/generate", headers={"Authorization": "Bearer ana"})
         .json()
     )
-    assert any("after -1 seconds" in note for note in plan["notes"])
+    assert any("ran out of time (-1 seconds)" in note for note in plan["notes"])
 
 
 def test_unexpected_errors_explain_themselves():
@@ -331,3 +331,84 @@ def test_unexpected_errors_explain_themselves():
     )
     assert reply.status_code == 500
     assert "unexpected problem (RuntimeError)" in reply.json()["detail"]
+
+
+class CountingSearch(FakeRecipeAI):
+    """A search that remembers each query and returns these pages."""
+
+    def __init__(self, urls: list[str]) -> None:
+        super().__init__()
+        self.urls, self.queries = urls, []
+
+    def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
+        self.queries.append((query, count))
+        return self.urls
+
+
+MIXED = {
+    f"https://mixed.example/{kind}-{n}": LinkContent(
+        f"https://mixed.example/{kind}-{n}",
+        f"{kind.capitalize()} dish {n}\\n- 1 thing",
+        "recipe-data",
+        None,
+    )
+    for kind in ("fish", "chicken", "beef")
+    for n in range(1, 4)
+}
+
+
+def test_one_search_covers_every_rule_and_empty_meal():
+    ai = CountingSearch(list(MIXED))
+    app = create_app(
+        config=Config(push_enabled=False),
+        repo=MemoryRepo(),
+        ai=ai,
+        notifier=LogNotifier(),
+        verify_token=lambda token: {"uid": token, "email": "a@example.com", "email_verified": True},
+        read_link=lambda url: MIXED[url],
+    )
+    client = TestClient(app)
+    auth = {"Authorization": "Bearer ana"}
+    settings = client.get("/api/settings", headers=auth).json()
+    settings["rules"] = [
+        {"kind": "min", "count": 2, "tag": "fish"},
+        {"kind": "min", "count": 1, "tag": "chicken"},
+    ]
+    settings["slots"] = {
+        key: {
+            "cook": key.endswith("dinner") and key[:3] in ("mon", "tue", "wed", "thu", "fri"),
+            "portions": 2,
+        }
+        for key in settings["slots"]
+    }
+    client.put("/api/settings", json=settings, headers=auth)
+
+    plan = client.post("/api/plans/2026-11-16/generate", headers=auth).json()
+    assert len(ai.queries) == 1
+    query, count = ai.queries[0]
+    assert "at least 2 with fish" in query and "at least 1 with chicken" in query and count == 7
+    assert len(plan["meals"]) == 5 and all(meal["is_new"] for meal in plan["meals"].values())
+    assert all(status["ok"] for status in plan["rule_status"])
+
+
+def test_slow_pages_are_left_out_instead_of_holding_up_the_plan():
+    import time
+
+    def reader_with_a_slow_page(url: str) -> LinkContent:
+        if url.endswith("fish-2"):
+            time.sleep(2)
+        return PAGES[url]
+
+    ai = ListedLinks(
+        [
+            "https://good.example/fish-1",
+            "https://good.example/fish-2",
+            "https://good.example/fish-3",
+        ]
+    )
+    started = time.monotonic()
+    found = find_web_recipes(
+        ai, reader_with_a_slow_page, "fish", 3, [], deadline=time.monotonic() + 0.5
+    )
+    assert time.monotonic() - started < 1.5
+    assert [draft.title for draft in found] == ["Fish tacos", "Grilled fish"]

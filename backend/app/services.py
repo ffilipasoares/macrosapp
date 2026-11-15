@@ -37,7 +37,8 @@ class NotFound(Exception):
     pass
 
 
-WEB_SEARCH_SECONDS = 30
+# Firebase Hosting gives up on a request after 60 seconds; the rest of the plan needs little.
+WEB_SEARCH_SECONDS = 40
 
 
 @dataclass
@@ -112,18 +113,29 @@ def _fill_with_suggestions(
             for rule in max_rules
         )
 
-    def suggest(query: str, amount: int) -> list[Recipe]:
-        drafts = find_web_recipes(ai, web.read_link, query, amount, titles, deadline)
-        recipes = [Recipe(**draft.model_dump()) for draft in drafts]
-        titles.extend(recipe.title for recipe in recipes)
-        return recipes
+    # What the web has to provide: recipes for each "at least" rule that is short,
+    # and enough recipes overall to fill the empty meals. One search covers it all.
+    needs = {rule.tag: rule.count - count(rule.tag) for rule in min_rules}
+    needs = {tag: missing for tag, missing in needs.items() if missing > 0}
+    gaps = max(0, slot_count - len(picks))
+    total = max(gaps, sum(needs.values()))
+    if total == 0:
+        return picks, new_ids
+    query = "healthy home-cooked dinners"
+    if needs:
+        query += ", including " + ", ".join(f"at least {n} with {tag}" for tag, n in needs.items())
+    # Ask for a couple more than needed, since some pages will not work.
+    drafts = find_web_recipes(ai, web.read_link, query, total + 2, titles, deadline)
+    found = [Recipe(**draft.model_dump()) for draft in drafts]
+
+    def take(recipe: Recipe) -> None:
+        found.remove(recipe)
+        picks.append(recipe)
+        new_ids.add(recipe.id)
 
     for rule in min_rules:
-        missing = rule.count - count(rule.tag)
-        if missing <= 0:
-            continue
-        for recipe in suggest(f"healthy {rule.tag} dinner", missing):
-            if not planner.matches(recipe, rule.tag) or not allowed(recipe):
+        for recipe in [r for r in found if planner.matches(r, rule.tag)]:
+            if count(rule.tag) >= rule.count or not allowed(recipe):
                 continue
             if len(picks) >= slot_count:
                 # No free slot: replace a meal that no "at least" rule depends on.
@@ -138,15 +150,13 @@ def _fill_with_suggestions(
                 if spare is None:
                     break
                 picks.pop(spare)
-            picks.append(recipe)
-            new_ids.add(recipe.id)
+            take(recipe)
 
-    gaps = slot_count - len(picks)
-    if gaps > 0:
-        for recipe in suggest("healthy easy dinner", gaps):
-            if len(picks) < slot_count and allowed(recipe):
-                picks.append(recipe)
-                new_ids.add(recipe.id)
+    for recipe in list(found):
+        if len(picks) >= slot_count:
+            break
+        if allowed(recipe):
+            take(recipe)
     return picks, new_ids
 
 
@@ -169,7 +179,6 @@ def generate_plan(
     )
     notes: list[str] = []
     new_ids: set[str] = set()
-    # Firebase Hosting gives up on a request after 60 seconds, so the web search gets 30.
     deadline = time.monotonic() + WEB_SEARCH_SECONDS
 
     statuses = planner.rule_status(
@@ -191,8 +200,8 @@ def generate_plan(
 
     if ai is not None and len(picks) < len(slots) and time.monotonic() >= deadline:
         notes.append(
-            f"Stopped looking for new recipes on the web after {WEB_SEARCH_SECONDS} seconds. "
-            "Generate again to look for more."
+            f"The web search ran out of time ({WEB_SEARCH_SECONDS} seconds) before finding "
+            "enough recipes, so some meals are empty. Choose them yourself, or generate again."
         )
     if len(picks) < len(slots):
         notes.append(
