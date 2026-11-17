@@ -21,19 +21,12 @@ class CheckStandard(BaseModel):
     min_kinds: int | None = Field(default=None, ge=0)
 
 
-class PlantStandard(BaseModel):
-    target: float = Field(gt=0)
-    partial_weight: float = Field(ge=0, le=1)
-
-
 class Standards(BaseModel):
     version: str
     reviewed_by: str | None = None
     note: str = ""
     checks: dict[str, CheckStandard]
-    plants: PlantStandard
     proteins: dict[str, list[str]]
-    not_plants: list[str] = []
     foods: dict[str, list[str]]
 
 

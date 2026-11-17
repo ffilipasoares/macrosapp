@@ -1,4 +1,4 @@
-"""The week balance check and the count of different plants. Pure functions.
+"""The week balance check. Pure functions.
 
 Everything a nutritionist would decide (targets, which foods count as what) comes
 from the standards; this module only counts.
@@ -11,43 +11,28 @@ from typing import Any
 
 from app.standards import Standards
 
-# Food groups that count as plants; herbs and spices count partly.
-PLANT_GROUPS = (
-    "herbs_spices", "legumes", "whole_grains", "nuts_seeds", "fruit", "starchy_vegetables",
-    "vegetables",
-)  # fmt: skip
-
 
 def _matches(name: str, keyword: str) -> bool:
     # Whole words, allowing a plural: "chickpeas" matches "chickpea", "pea" does not match "peanut".
     return re.search(rf"\b{re.escape(keyword)}(e?s)?\b", name) is not None
 
 
-def classify(name: str, aisle: str, standards: Standards) -> tuple[str | None, str | None]:
-    """The food group of an ingredient and the plant it counts as, if any.
+def food_group(name: str, standards: Standards) -> str | None:
+    """The food group an ingredient belongs to, if the standards list it.
 
-    Longer keywords win, so "sweet potato" is a starchy vegetable, not "potato" alone,
-    and "coriander seed" is a spice. Unknown items from the produce aisle still count
-    as a vegetable, under their own name.
+    Longer keywords win, so "green bean" is a vegetable, not a legume.
     """
-    if any(_matches(name, word) for word in standards.not_plants):
-        return None, None  # olive oil, vegetable stock
-    best: tuple[int, str, str] | None = None
-    for group in PLANT_GROUPS:
-        for keyword in standards.foods.get(group, []):
+    best: tuple[int, str] | None = None
+    for group, keywords in standards.foods.items():
+        for keyword in keywords:
             if _matches(name, keyword) and (best is None or len(keyword) > best[0]):
-                best = (len(keyword), group, keyword)
-    if best:
-        return best[1], best[2]
-    if aisle == "produce":
-        return "vegetables", name
-    return None, None
+                best = (len(keyword), group)
+    return best[1] if best else None
 
 
 def week_balance(meals: Iterable[tuple[str, Any]], standards: Standards) -> dict:
     """Check a week of (slot, recipe) pairs against the standards."""
     meals = list(meals)
-    plants: dict[str, float] = {}
     vegetable_days: set[str] = set()
     planned_days: set[str] = set()
     legume_meals = 0
@@ -57,18 +42,10 @@ def week_balance(meals: Iterable[tuple[str, Any]], standards: Standards) -> dict
         day = slot.split("_")[0]
         planned_days.add(day)
         proteins.append(recipe.protein or "other")
-        has_legumes = False
-        for ingredient in recipe.ingredients:
-            group, plant = classify(ingredient.name, ingredient.aisle, standards)
-            if plant is None:
-                continue
-            weight = standards.plants.partial_weight if group == "herbs_spices" else 1.0
-            plants[plant] = max(plants.get(plant, 0.0), weight)
-            if group == "vegetables":
-                vegetable_days.add(day)
-            if group == "legumes":
-                has_legumes = True
-        legume_meals += has_legumes
+        groups = {food_group(i.name, standards) for i in recipe.ingredients}
+        if "vegetables" in groups:
+            vegetable_days.add(day)
+        legume_meals += "legumes" in groups or recipe.protein == "legumes"
 
     def count_protein(kind: str) -> int:
         return sum(1 for p in proteins if p in standards.proteins.get(kind, []))
@@ -109,13 +86,9 @@ def week_balance(meals: Iterable[tuple[str, Any]], standards: Standards) -> dict
             }
         )
 
-    plant_count = round(sum(plants.values()), 2)
     return {
         "balanced": bool(meals) and all(check["ok"] for check in checks),
         "checks": checks,
-        "plants": plant_count,
-        "plants_target": standards.plants.target,
-        "plant_names": sorted(plants),
         "standards_version": standards.version,
         "reviewed": standards.reviewed_by is not None,
     }

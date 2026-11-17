@@ -371,20 +371,14 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
   );
 }
 
-/** One calm line about the week's balance; a tap shows each check and the plants. */
+/** One calm line about the week's balance; a tap shows each check. */
 function BalanceCard({ balance }: { balance: WeekBalance }) {
   const [open, setOpen] = useState(false);
   const missing = balance.checks.filter((check) => !check.ok);
-  const plants = Math.floor(balance.plants);
   return (
     <section aria-label="Week balance" className="rounded-2xl bg-white/60 px-4 py-3">
-      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 text-left text-sm">
-        <span className="font-semibold">
-          {balance.balanced ? "Balanced week ✓" : missing.length === 1 ? `Nearly balanced: ${missing[0].label.toLowerCase()}` : `${missing.length} things to balance`}
-        </span>
-        <span className="shrink-0 text-ink-soft">
-          🌱 {plants} of {balance.plants_target} plants
-        </span>
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className="w-full text-left text-sm font-semibold">
+        {balance.balanced ? "Balanced week ✓" : missing.length === 1 ? `Nearly balanced: ${missing[0].label.toLowerCase()}` : `${missing.length} things to balance`}
       </button>
       {open ? (
         <div className="mt-3 flex flex-col gap-3 text-sm">
@@ -400,11 +394,6 @@ function BalanceCard({ balance }: { balance: WeekBalance }) {
               </li>
             ))}
           </ul>
-          {balance.plant_names.length ? (
-            <p className="text-ink-soft">
-              <span className="font-medium text-ink">Plants this week:</span> {balance.plant_names.join(", ")}. Herbs and spices count as a quarter.
-            </p>
-          ) : null}
           {balance.reviewed ? null : (
             <p className="text-xs text-ink-soft">General guidance, not yet reviewed by a nutritionist. It never changes your plan.</p>
           )}

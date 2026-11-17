@@ -267,9 +267,6 @@ class WeekBalance(BaseModel):
 
     balanced: bool
     checks: list[BalanceCheck]
-    plants: float
-    plants_target: float
-    plant_names: list[str]
     standards_version: str
     reviewed: bool
 

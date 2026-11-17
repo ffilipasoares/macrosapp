@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.ai.fake import FakeRecipeAI
 from app.config import Config
-from app.core.balance import classify, week_balance
+from app.core.balance import food_group, week_balance
 from app.main import create_app
 from app.models import Ingredient
 from app.notify import LogNotifier
@@ -21,32 +21,13 @@ def recipe(protein: str, *names: str):
 def test_standards_are_a_placeholder_until_reviewed():
     assert S.version.startswith("placeholder")
     assert S.reviewed_by is None
-    assert S.plants.target == 30
 
 
-def test_classify_prefers_the_longest_match_and_whole_words():
-    assert classify("sweet potato", "produce", S) == ("starchy_vegetables", "sweet potato")
-    assert classify("chickpeas", "pantry", S)[0] == "legumes"
-    assert classify("peanut butter", "pantry", S)[1] == "peanut"
-    assert classify("fresh basil", "produce", S)[0] == "herbs_spices"
-    assert classify("chicken breast", "meat", S) == (None, None)
-    assert classify("salt", "pantry", S) == (None, None)
-    assert classify("olive oil", "pantry", S) == (None, None)
-
-
-def test_unknown_produce_still_counts_as_a_plant():
-    assert classify("romanesco", "produce", S) == ("vegetables", "romanesco")
-
-
-def test_plants_count_once_each_and_herbs_count_a_quarter():
-    meals = [
-        ("mon_dinner", recipe("chicken", "onion", "garlic", "tomato", "basil")),
-        ("tue_dinner", recipe("fish", "onion", "lemon", "parsley")),
-    ]
-    result = week_balance(meals, S)
-    # onion, garlic, tomato, lemon = 4; basil, parsley = 0.5
-    assert result["plants"] == 4.5
-    assert "onion" in result["plant_names"]
+def test_food_groups_use_whole_words_and_the_longest_match():
+    assert food_group("chickpeas", S) == "legumes"
+    assert food_group("green beans", S) == "vegetables"
+    assert food_group("peanut butter", S) is None
+    assert food_group("chicken breast", S) is None
 
 
 def test_a_balanced_week_passes_every_check():
@@ -109,6 +90,6 @@ def test_the_plan_returns_its_balance():
         assert client.post("/api/recipes", json=body, headers=auth).status_code in (200, 201)
     plan = client.post("/api/plans/2026-11-16/generate", headers=auth).json()
     balance = plan["balance"]
-    assert balance["plants_target"] == 30
+    assert "plants" not in balance
     assert balance["standards_version"].startswith("placeholder")
     assert {c["key"] for c in balance["checks"]} >= {"fish", "legumes", "red_meat"}

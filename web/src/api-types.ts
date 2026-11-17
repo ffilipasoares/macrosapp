@@ -639,9 +639,6 @@ export interface components {
         WeekBalance: {
             balanced: boolean;
             checks: components["schemas"]["BalanceCheck"][];
-            plants: number;
-            plants_target: number;
-            plant_names: string[];
             standards_version: string;
             reviewed: boolean;
         };
