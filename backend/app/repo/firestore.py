@@ -38,7 +38,10 @@ class FirestoreRepo:
                 return Household(id=snapshot.id, **snapshot.to_dict())
 
         household = Household(
-            members=[uid], owner_email=email, shortcut_token=secrets.token_urlsafe(24)
+            members=[uid],
+            owner_email=email,
+            shortcut_token=secrets.token_urlsafe(24),
+            setup_done=False,
         )
         batch = self.db.batch()
         batch.set(self._household(household.id), household.model_dump(mode="json", exclude={"id"}))
@@ -64,6 +67,9 @@ class FirestoreRepo:
 
     def add_device_token(self, household_id: str, token: str) -> None:
         self._household(household_id).update({"device_tokens": firestore.ArrayUnion([token])})
+
+    def mark_setup_done(self, household_id: str) -> None:
+        self._household(household_id).update({"setup_done": True})
 
     def remove_device_tokens(self, household_id: str, tokens: list[str]) -> None:
         if tokens:

@@ -1,7 +1,7 @@
 # Meal Planner
 
 A personal app for one weekly routine: decide what to cook, then get the grocery
-list for it. Recipes go in once; every Friday the app drafts next week's plan
+list for it. Recipes go in once; every week, on the day you choose, the app drafts next week's plan
 from them, following your rules; you swap what you don't fancy and tap
 **Give me the grocery list**.
 
@@ -12,7 +12,9 @@ Google Cloud.
 
 | You want to | The app |
 |---|---|
-| Stop planning from a blank page | Drafts a week of meals from your recipe library every Friday and notifies you |
+| Stop planning from a blank page | Drafts next week's meals on the day and hour you choose (Friday 17:00 by default) and notifies you |
+| Start without an empty app | A short first-use setup asks who eats, which meals you cook, when the plan should be ready, diets, allergies, foods you never eat, kitchen equipment and staples, then makes the first plan |
+| Stay safe with allergies | Recipes with any of the 14 EU allergens you choose, or your own, are never planned or swapped in; checked by ingredient names and once per recipe by AI. Choosing one by hand shows a warning |
 | Keep variety | Uses at most 20% of meals from the previous two weeks, preferring recipes cooked longest ago |
 | Eat a balanced week without setting anything up | Plans aim for a balanced week by default: vegetables most days, fish twice, beans or lentils once, red meat at most twice |
 | Add your own preferences | Optional extra rules on top, such as "at least 2 chicken meals a week", enforced by counting; a swap that would break one is flagged |
@@ -70,7 +72,9 @@ can be combined. Only main dishes are used in the weekly plan.
   protein or tag, on top of the balanced week, plus how many weeks to look back
   for repeats and what share of repeats is allowed.
 - *Always in the house*: ingredients left off the generated list.
-- *Friday notification*: turn on push notifications for this phone.
+- *When the plan is ready*: the day and hour next week's plan is made.
+- *Allergies*, *Foods you never eat*, *Kitchen equipment*: kept out of plans.
+- *Plan-ready notification*: turn on push notifications for this phone.
 - *Siri and the share sheet*: the addresses and private key for the two Apple
   Shortcuts (see [docs/shortcuts.md](docs/shortcuts.md)).
 - *Account*: sign out.
@@ -161,7 +165,7 @@ Written but not yet run against the real service, because that needs your
 Firebase project:
 - **Gemini**: screenshot reading, text import and recipe search. The fake AI
   stood in for it in all tests.
-- **Push notifications** and the Friday Cloud Scheduler job delivery.
+- **Push notifications** and the hourly Cloud Scheduler job delivery.
 - **Google sign-in** on a real iPhone, and the two Apple Shortcuts.
 - **Deployment** to Cloud Run and Firebase Hosting.
 

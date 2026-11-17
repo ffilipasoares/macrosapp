@@ -15,6 +15,7 @@ class Me(BaseModel):
     email: str
     shortcut_token: str
     push_devices: int
+    setup_done: bool
 
 
 class ItemText(BaseModel):
@@ -36,7 +37,14 @@ def me(household: CurrentHousehold) -> Me:
         email=household.owner_email,
         shortcut_token=household.shortcut_token,
         push_devices=len(household.device_tokens),
+        setup_done=household.setup_done,
     )
+
+
+@router.post("/setup/done", status_code=204)
+def setup_done(household: CurrentHousehold, repo: RepoDep) -> None:
+    """The first-use setup is finished or skipped: the app opens normally from now on."""
+    repo.mark_setup_done(household.id)
 
 
 @router.get("/settings")

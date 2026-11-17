@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.allergens import Equipment, verdict_key
 from app.core.diet import tidy
 from app.core.ingredients import guess_aisle, normalize_name, normalize_unit
 from app.core.nutrition import recipe_totals
@@ -109,6 +110,8 @@ class RecipeDraft(BaseModel):
     category: Category = "main"
     tags: list[str] = Field(default_factory=list)
     prep_minutes: int | None = Field(default=None, ge=0, le=1440)
+    # Big equipment the recipe cannot be made without, e.g. ["oven"].
+    equipment: list[Equipment] = Field(default_factory=list)
     source_url: str | None = None
     # A photo: uploaded to Firebase Storage by the app, or taken from the recipe's web page.
     image_url: str | None = Field(default=None, max_length=2000)
@@ -204,6 +207,15 @@ class Settings(BaseModel):
     # Free text, several allowed, e.g. ["mediterranean", "high-protein"].
     # Vegetarian, vegan and pescatarian also rule out foods.
     diets: list[str] = Field(default_factory=list, max_length=6)
+    # When next week's plan is made, in the household's time zone.
+    plan_day: Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"] = "fri"
+    plan_hour: int = Field(default=17, ge=0, le=23)
+    # The 14 EU allergens by name ("milk", "tree nuts"...) or anything else ("kiwi").
+    allergies: list[str] = Field(default_factory=list, max_length=20)
+    # Foods never eaten, matched by name: kept out of plans, no warning needed.
+    avoid: list[str] = Field(default_factory=list, max_length=30)
+    # The big kitchen equipment there is. None: not asked, so nothing is ruled out.
+    equipment: list[Equipment] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -212,6 +224,18 @@ class Settings(BaseModel):
         if isinstance(data, dict) and "diet" in data and not data.get("diets"):
             data = {**data, "diets": [data["diet"]] if data["diet"] else []}
         return data
+
+    @field_validator("allergies", "avoid")
+    @classmethod
+    def _tidy_foods(cls, value: list[str]) -> list[str]:
+        foods = tidy(value)
+        if any(len(food) > 40 for food in foods):
+            raise ValueError("a food is at most 40 characters")
+        return foods
+
+    def planning_needs(self) -> list[str]:
+        """The diets plus one "free of ..." per allergy: what the AI judges each recipe on."""
+        return [*self.diets, *(verdict_key(a) for a in self.allergies)]
 
     @field_validator("diets")
     @classmethod
@@ -288,6 +312,8 @@ class Alternative(BaseModel):
     keeps_rules: bool
     already_planned: bool = False
     fits_diets: bool = True
+    # E.g. "contains milk", "needs an air fryer". Still selectable, shown as a warning.
+    warnings: list[str] = Field(default_factory=list)
 
 
 class GroceryItem(BaseModel):
@@ -310,3 +336,6 @@ class Household(BaseModel):
     shortcut_token: str = ""
     device_tokens: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=now)
+    # New households go through the first-use setup. Households saved before the setup
+    # existed have no such field and are treated as set up.
+    setup_done: bool = True

@@ -18,7 +18,10 @@ class MemoryRepo:
     def household_for_user(self, uid: str, email: str) -> Household:
         if uid not in self.user_household:
             household = Household(
-                members=[uid], owner_email=email, shortcut_token=secrets.token_urlsafe(24)
+                members=[uid],
+                owner_email=email,
+                shortcut_token=secrets.token_urlsafe(24),
+                setup_done=False,
             )
             self.households[household.id] = household
             self.user_household[uid] = household.id
@@ -41,6 +44,9 @@ class MemoryRepo:
         tokens = self.households[household_id].device_tokens
         if token not in tokens:
             tokens.append(token)
+
+    def mark_setup_done(self, household_id: str) -> None:
+        self.households[household_id].setup_done = True
 
     def remove_device_tokens(self, household_id: str, tokens: list[str]) -> None:
         household = self.households[household_id]

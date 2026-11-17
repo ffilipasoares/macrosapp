@@ -100,22 +100,34 @@ gcloud run services update mealplan-api --region europe-west1 --update-env-vars 
 `WEB_SEARCH_SECONDS` is how long the web search may run. The default is 50, which
 fits through Hosting; raise it only once `VITE_API_URL` is set and deployed.
 
-## 4. Schedule the Friday plan
+## 4. Schedule the weekly plan
 
-Use the Cloud Run address printed in step 2, not the web.app address:
+Each household chooses the day and hour its plan is ready (Settings, default Friday
+17:00). The scheduler runs the job every hour; the job plans only for households whose
+moment has come, in their own time zone. Use the Cloud Run address printed in step 2,
+not the web.app address:
 
 ```bash
 gcloud scheduler jobs create http weekly-plan \
   --location europe-west1 \
-  --schedule "0 17 * * 5" \
+  --schedule "5 * * * *" \
   --time-zone "Europe/Lisbon" \
   --uri "https://YOUR-CLOUD-RUN-URL/api/jobs/weekly-plan" \
   --http-method POST \
   --headers "X-Job-Token=THE_RANDOM_VALUE"
 ```
 
-That is 17:00 every Friday, Lisbon time. Running it twice in a week is safe:
-an existing plan for next week is left alone.
+That is five past every hour. If you created the Friday-only job before, change it
+instead of creating a new one:
+
+```bash
+gcloud scheduler jobs update http weekly-plan \
+  --location europe-west1 \
+  --schedule "5 * * * *"
+```
+
+Running it often is safe: a household that already has next week's plan is left
+alone, and a missed hour is caught up by the next run.
 
 ## 5. On each iPhone
 

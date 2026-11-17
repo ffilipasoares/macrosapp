@@ -734,13 +734,18 @@ function MealScreen({
 
 function isSuggested(option: Alternative): boolean {
   return (
-    (option.recipe.category ?? "main") === "main" && option.fits_diets !== false && !option.already_planned && option.keeps_rules
+    (option.recipe.category ?? "main") === "main" &&
+    option.fits_diets !== false &&
+    !(option.warnings ?? []).length &&
+    !option.already_planned &&
+    option.keeps_rules
   );
 }
 
 /** Why a recipe is not a suggestion. It can still be chosen. */
 function optionNotes(option: Alternative): string[] {
-  const notes: string[] = [];
+  // Allergies and the rest come first: they matter most.
+  const notes: string[] = (option.warnings ?? []).map((w) => w.charAt(0).toUpperCase() + w.slice(1));
   const category = option.recipe.category ?? "main";
   if (category !== "main") notes.push(CATEGORIES.find((c) => c.key === category)?.label ?? category);
   if (option.already_planned) notes.push("Already this week");

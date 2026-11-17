@@ -6,16 +6,18 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
 from app import standards
 from app.ai.base import AIError, RecipeAI
 from app.core import balance, planner
+from app.core.allergens import found_in, missing_equipment
 from app.core.diet import fits, needs_verdict, search_phrase
 from app.core.grocery import build_grocery_lines
 from app.core.ingredients import guess_aisle, normalize_name
-from app.core.weeks import SLOT_KEYS, next_week_id, previous_week_ids
+from app.core.weeks import DAYS, SLOT_KEYS, next_week_id, previous_week_ids
 from app.images import ImageStore, keep_own_copy
 from app.links import LinkContent, read_image, read_link
 from app.models import (
@@ -134,14 +136,14 @@ def _fill_with_suggestions(
     total = max(gaps, sum(needs.values()))
     if total == 0:
         return picks, new_ids
-    query = search_phrase(settings.diets, needs)
+    query = search_phrase(settings.planning_needs(), needs)
     # Ask for a couple more than needed, since some pages will not work.
     drafts = find_web_recipes(ai, web.read_link, query, total + 2, titles, deadline)
     found = []
     for draft in drafts:
         # Found by a search for these diets, so they count as fitting them.
         recipe = Recipe(**draft.model_dump(), diet_fit={d: True for d in settings.diets})
-        if recipe.category == "main" and fits(settings.diets, recipe):
+        if recipe.category == "main" and suits(settings, recipe):
             found.append(recipe)
 
     def take(recipe: Recipe) -> None:
@@ -205,15 +207,15 @@ def _fill_with_suggestions(
                 remaining_gaps,
                 forbidden,
                 used_titles,
-                " and ".join(settings.diets),
+                " and ".join(settings.planning_needs()),
             )
             # Written for these diets, so they count as fitting them.
             extra_found = [
                 recipe
                 for draft in extra_drafts
                 if draft.category == "main"
-                and fits(
-                    settings.diets,
+                and suits(
+                    settings,
                     recipe := Recipe(
                         **draft.model_dump(), diet_fit={d: True for d in settings.diets}
                     ),
@@ -266,6 +268,22 @@ def check_diets(
     return None
 
 
+def warnings_for(settings: Settings, recipe: Recipe) -> list[str]:
+    """Why a recipe should not be planned for this household, in plain words."""
+    found = found_in(recipe, settings.allergies, settings.avoid)
+    missing = missing_equipment(recipe, settings.equipment)
+    article = {item: "an" if item[0] in "aeiou" else "a" for item in missing}
+    return [f"contains {food}" for food in found] + [
+        f"needs {article[item]} {item}" for item in missing
+    ]
+
+
+def suits(settings: Settings, recipe: Recipe) -> bool:
+    """Whether the planner may pick a recipe: fits the diets, no allergy, no avoided
+    food, and nothing needed that the kitchen lacks. Choosing by hand is still free."""
+    return fits(settings.planning_needs(), recipe) and not warnings_for(settings, recipe)
+
+
 def all_rules(settings: Settings, slot_count: int) -> list[Rule]:
     """The balanced-week rules from the standards, then the household's own extras."""
     return [*balance.planner_rules(standards.load(), slot_count), *settings.rules]
@@ -302,10 +320,10 @@ def generate_plan(
 
     # Only main dishes are planned; desserts, breakfasts and the rest stay in the library.
     library = [r for r in repo.list_recipes(household_id) if r.category == "main"]
-    problem = check_diets(repo, ai, household_id, library, settings.diets)
+    problem = check_diets(repo, ai, household_id, library, settings.planning_needs())
     if problem:
         notes.append(problem)
-    recipes = [r for r in library if fits(settings.diets, r) and r.id not in kept_ids]
+    recipes = [r for r in library if suits(settings, r) and r.id not in kept_ids]
     recent = recent_recipe_ids(repo, household_id, week_id, settings)
     rules = _adjusted_rules(all_rules(settings, len(settings.cook_slots())), kept_recipes)
     open_settings = settings.model_copy(update={"rules": rules})
@@ -376,11 +394,11 @@ def apply_diets(
         raise NotFound("There is no plan for this week yet")
     settings = repo.get_settings(household_id)
     planned = [meal.recipe for meal in plan.meals.values()]
-    check_diets(repo, ai, household_id, planned, settings.diets)
+    check_diets(repo, ai, household_id, planned, settings.planning_needs())
     keep = {
         slot: meal
         for slot, meal in plan.meals.items()
-        if fits(settings.diets, meal.recipe) and slot in settings.cook_slots()
+        if suits(settings, meal.recipe) and slot in settings.cook_slots()
     }
     updated = generate_plan(repo, ai, household_id, week_id, rng, web, keep=keep)
     if plan.status == "approved":
@@ -446,6 +464,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     )
     for option in options:
         option.fits_diets = fits(settings.diets, option.recipe)
+        option.warnings = warnings_for(settings, option.recipe)
     # Best suggestions first; everything else follows, flagged but still selectable:
     # main dishes before other types, then fitting the diets, then not already this
     # week, then keeping the rules (the order within each step stays as ranked).
@@ -453,6 +472,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
         key=lambda option: (
             option.recipe.category != "main",
             not option.fits_diets,
+            bool(option.warnings),
             option.already_planned,
             not option.keeps_rules,
         )
@@ -502,7 +522,10 @@ def swap_meal(
     options = [
         option
         for option in meal_alternatives(repo, household_id, week_id, slot)
-        if option.recipe.category == "main" and option.fits_diets and not option.already_planned
+        if option.recipe.category == "main"
+        and option.fits_diets
+        and not option.warnings
+        and not option.already_planned
     ]
     if not options:
         raise NotFound("No other recipe in your library fits this meal. Add more recipes.")
@@ -587,6 +610,17 @@ def add_items_from_text(
     return items
 
 
+def plan_is_due(settings: Settings, local_now: datetime) -> bool:
+    """Whether this week's chosen plan moment (day and hour) has come, in local time."""
+    monday = local_now.date() - timedelta(days=local_now.weekday())
+    moment = datetime.combine(
+        monday + timedelta(days=DAYS.index(settings.plan_day)),
+        dt_time(settings.plan_hour),
+        tzinfo=local_now.tzinfo,
+    )
+    return local_now >= moment
+
+
 def run_weekly_job(
     repo: Repo,
     ai: RecipeAI | None,
@@ -595,18 +629,30 @@ def run_weekly_job(
     today: date | None = None,
     rng: random.Random | None = None,
     web: Web | None = None,
+    now: datetime | None = None,
 ) -> dict[str, int]:
-    """Draft next week's plan for every household and tell them it is ready.
+    """Draft next week's plan for every household whose chosen day and hour have come.
 
-    A household that already has a plan for next week is skipped, so running the
-    job twice does not overwrite changes or send a second notification.
+    The scheduler calls this every hour. A household that already has a plan for next
+    week is skipped, so running the job again does not overwrite changes or send a
+    second notification; a missed hour is caught up by the next run.
+    ``today`` (tests) means the end of that day.
     """
-    summary = {"generated": 0, "skipped": 0, "failed": 0}
+    summary = {"generated": 0, "skipped": 0, "waiting": 0, "failed": 0}
     for household in repo.list_households():
         try:
             settings = repo.get_settings(household.id)
-            local_today = today or datetime.now(ZoneInfo(settings.timezone)).date()
-            target = next_week_id(local_today)
+            zone = ZoneInfo(settings.timezone)
+            if now is not None:
+                local_now = now.astimezone(zone)
+            elif today is not None:
+                local_now = datetime.combine(today, dt_time(23, 59), tzinfo=zone)
+            else:
+                local_now = datetime.now(zone)
+            if not plan_is_due(settings, local_now):
+                summary["waiting"] += 1
+                continue
+            target = next_week_id(local_now.date())
             if repo.get_plan(household.id, target) is not None:
                 summary["skipped"] += 1
                 continue

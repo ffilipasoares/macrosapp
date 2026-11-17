@@ -65,6 +65,8 @@ const json = (method: string, body: unknown): RequestInit => ({ method, body: JS
 
 export const api = {
   me: () => request<Me>("/me"),
+  /** The first-use setup is finished or skipped. */
+  setupDone: () => request<void>("/setup/done", { method: "POST" }),
 
   getSettings: () => request<Settings>("/settings"),
   saveSettings: (settings: Settings) => request<Settings>("/settings", json("PUT", settings)),

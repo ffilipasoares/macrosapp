@@ -344,18 +344,18 @@ def test_weekly_job_drafts_next_week_once_and_notifies(ctx):
     first = services.run_weekly_job(
         repo, None, notifier, "https://app.example", friday, random.Random(1)
     )
-    assert first == {"generated": 1, "skipped": 0, "failed": 0}
+    assert first == {"generated": 1, "skipped": 0, "waiting": 0, "failed": 0}
     assert repo.get_plan(household_id, "2026-11-16") is not None
     assert notifier.sent == [
         (["device-token-123"], "Meal plan ready", "Your meal plan for next week is ready.")
     ]
 
     second = services.run_weekly_job(repo, None, notifier, "https://app.example", friday)
-    assert second == {"generated": 0, "skipped": 1, "failed": 0}
+    assert second == {"generated": 0, "skipped": 1, "waiting": 0, "failed": 0}
     assert len(notifier.sent) == 1
 
     ok = client.post("/api/jobs/weekly-plan", headers={"X-Job-Token": "job-secret"})
-    assert ok.status_code == 200 and set(ok.json()) == {"generated", "skipped", "failed"}
+    assert ok.status_code == 200 and set(ok.json()) == {"generated", "skipped", "waiting", "failed"}
 
 
 def test_grocery_fallback_routes_tick_remove_and_clear(ctx):

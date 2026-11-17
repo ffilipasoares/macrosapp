@@ -18,6 +18,7 @@ from google.genai import types
 from pydantic import BaseModel, ValidationError
 
 from app.ai.base import AIError
+from app.core.allergens import Equipment
 from app.models import Aisle, Category, Ingredient, IngredientNutrition, RecipeDraft
 
 log = logging.getLogger(__name__)
@@ -54,6 +55,9 @@ Rules for the structured recipe:
 - servings is how many people the recipe feeds; use 2 if the source does not say.
 - prep_minutes is the total time, or null if unknown. source_url is null if unknown.
 - tags are a few short lower-case labels such as "quick", "pasta", "soup", "healthy".
+- equipment lists only big equipment the recipe cannot be made without, from: "oven",
+  "air fryer", "microwave", "slow cooker", "pressure cooker", "blender", "grill". Leave
+  it empty when a hob and pans are enough.
 - steps are short imperative sentences, one action each.
 - Never invent ingredients or amounts that the source does not support.
 """
@@ -77,6 +81,7 @@ class _AiRecipe(BaseModel):
     protein: Protein
     category: Category
     tags: list[str]
+    equipment: list[Equipment] = []
     prep_minutes: int | None
     original_language: str
     source_url: str | None
@@ -128,6 +133,7 @@ def _to_draft(recipe: _AiRecipe) -> RecipeDraft:
             protein=recipe.protein,
             category=recipe.category,
             tags=recipe.tags[:8],
+            equipment=list(dict.fromkeys(recipe.equipment)),
             prep_minutes=recipe.prep_minutes
             if recipe.prep_minutes and recipe.prep_minutes > 0
             else None,

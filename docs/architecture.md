@@ -16,7 +16,7 @@ flowchart LR
     Auth["Authentication<br/>Google sign-in"]
     FS[("Firestore<br/>households · recipes · plans · groceries")]
     ST[("Storage<br/>recipe photos")]
-    FCM["Cloud Messaging<br/>Friday notification"]
+    FCM["Cloud Messaging<br/>plan-ready notification"]
   end
 
   subgraph CloudRun["Cloud Run · Python FastAPI"]
@@ -29,7 +29,7 @@ flowchart LR
 
   Gemini["Vertex AI<br/>Gemini 3.5 Flash + Google Search"]
   Web["The web<br/>recipe sites · TikTok oEmbed"]
-  Sched["Cloud Scheduler<br/>every Friday"]
+  Sched["Cloud Scheduler<br/>every hour"]
 
   App -->|loads| Hosting
   App -->|signs in| Auth

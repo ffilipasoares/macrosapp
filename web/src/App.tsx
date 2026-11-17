@@ -10,6 +10,7 @@ import { PlanPage } from "./pages/PlanPage";
 import { RecipeEditPage, RecipePage } from "./pages/RecipePage";
 import { RecipesPage } from "./pages/RecipesPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SetupPage } from "./pages/SetupPage";
 import { useSession } from "./session";
 
 export function App() {
@@ -29,7 +30,7 @@ export function App() {
 
   return (
     <BrowserRouter>
-      <Shell householdId={session.me.household_id} />
+      {session.me.setup_done ? <Shell householdId={session.me.household_id} /> : <SetupPage />}
     </BrowserRouter>
   );
 }

@@ -3,6 +3,7 @@ import { Bell, Check, Copy, LogOut, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { AllergyFields, AvoidFields, DIETS, EquipmentFields, PlanDayFields } from "../components/ProfileFields";
 import { ErrorNote, Loading, Stepper, messageOf, quietButton } from "../components/ui";
 import { auth } from "../firebase";
 import { DAY_COLORS, proteinStyle } from "../lib/style";
@@ -11,14 +12,6 @@ import { enablePush, pushState, type PushState } from "../push";
 import { useMe } from "../session";
 import { PROTEINS, type Rule, type Settings } from "../types";
 
-const DIETS = [
-  { value: "mediterranean", label: "Mediterranean" },
-  { value: "high-protein", label: "High protein" },
-  { value: "low-carb", label: "Low carb" },
-  { value: "pescatarian", label: "Pescatarian" },
-  { value: "vegetarian", label: "Vegetarian" },
-  { value: "vegan", label: "Vegan" },
-];
 
 export function SettingsPage() {
   const me = useMe();
@@ -145,6 +138,10 @@ export function SettingsPage() {
                 </li>
               ))}
             </ol>
+          </Section>
+
+          <Section title="When the plan is ready" note="Next week's plan is made at this time, in your time zone, and you get a notification.">
+            <PlanDayFields settings={settings} change={change} />
           </Section>
 
           <Section
@@ -280,6 +277,18 @@ export function SettingsPage() {
             ) : null}
           </Section>
 
+          <Section title="Allergies" note="Recipes with these are never planned or swapped in. You can still choose one by hand; it is marked.">
+            <AllergyFields settings={settings} change={change} />
+          </Section>
+
+          <Section title="Foods you never eat" note="Recipes with these are left out of your plans.">
+            <AvoidFields settings={settings} change={change} />
+          </Section>
+
+          <Section title="Kitchen equipment" note="The big things you have. Recipes that need something else are not planned.">
+            <EquipmentFields settings={settings} change={change} />
+          </Section>
+
           <Section title="Macros portion" note="Macros are shown for one portion. Choose what one portion means.">
             <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Reference portion">
               {portionChoices.map((choice) => {
@@ -364,7 +373,7 @@ export function SettingsPage() {
             </form>
           </Section>
 
-          <Section title="Friday notification" note="Get “Your meal plan for next week is ready” on this phone every Friday.">
+          <Section title="Plan-ready notification" note="Get “Your meal plan for next week is ready” on this phone each week, at the time chosen above.">
             {push === "on" && <p className="rounded-2xl bg-green-soft px-4 py-3 text-sm font-medium">Notifications are on for this phone.</p>}
             {push === "off" && (
               <button className={quietButton} onClick={() => enablePush().then(setPush).catch((e) => setError(messageOf(e)))}>

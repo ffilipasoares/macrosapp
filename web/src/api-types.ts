@@ -406,6 +406,8 @@ export interface components {
              * @default true
              */
             fits_diets?: boolean;
+            /** Warnings, e.g. "contains milk", "needs an air fryer" */
+            warnings?: string[];
             recipe: components["schemas"]["Recipe"];
             /** Keeps Rules */
             keeps_rules: boolean;
@@ -555,6 +557,8 @@ export interface components {
             shortcut_token: string;
             /** Push Devices */
             push_devices: number;
+            /** Setup Done */
+            setup_done: boolean;
         };
         /**
          * Macros
@@ -646,6 +650,8 @@ export interface components {
         Recipe: {
             /** Title */
             title: string;
+            /** Equipment */
+            equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[];
             /**
              * Servings
              * @default 2
@@ -706,6 +712,8 @@ export interface components {
         RecipeDraft: {
             /** Title */
             title: string;
+            /** Equipment */
+            equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[];
             /**
              * Servings
              * @default 2
@@ -823,6 +831,22 @@ export interface components {
             reference_portion?: components["schemas"]["ReferencePortion"];
             /** Diets */
             diets?: string[];
+            /**
+             * Plan Day
+             * @default fri
+             */
+            plan_day?: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+            /**
+             * Plan Hour
+             * @default 17
+             */
+            plan_hour?: number;
+            /** Allergies */
+            allergies?: string[];
+            /** Avoid */
+            avoid?: string[];
+            /** Equipment */
+            equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[] | null;
         };
         /** SiriItem */
         SiriItem: {
