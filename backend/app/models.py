@@ -253,9 +253,31 @@ class RuleStatus(BaseModel):
     target: int
 
 
+class BalanceCheck(BaseModel):
+    key: str
+    label: str
+    ok: bool
+    value: int
+    target: int
+    detail: str
+
+
+class WeekBalance(BaseModel):
+    """How the week compares with the eat-well standards. Guidance, never a block."""
+
+    balanced: bool
+    checks: list[BalanceCheck]
+    plants: float
+    plants_target: float
+    plant_names: list[str]
+    standards_version: str
+    reviewed: bool
+
+
 class PlanOut(WeekPlan):
     rule_status: list[RuleStatus] = Field(default_factory=list)
     open_slots: list[str] = Field(default_factory=list)
+    balance: WeekBalance | None = None
 
 
 class Alternative(BaseModel):

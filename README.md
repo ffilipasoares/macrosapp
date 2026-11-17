@@ -24,6 +24,7 @@ Google Cloud.
 | Change a meal fast | A swap button on each meal in the week replaces it in one tap with another recipe that keeps your rules |
 | Know what you eat | Shows calories, protein, carbs and fat per portion for every recipe and planned meal; you choose in Settings whether a portion is one serving or a fixed weight (e.g. 400 g) |
 | Keep recipes recognisable | Add a photo to any recipe; recipes from websites bring their own photo |
+| Eat a balanced week | Checks the week against simple eat-well guidance (vegetables most days, fish twice, legumes once, red meat at most twice, varied proteins) and counts the different plants against 30. One calm line on the plan; tap it for the details. Guidance only, it never changes the plan |
 | Capture a recipe by talking | Record yourself describing it; it is transcribed and turned into a recipe |
 
 ## The screens
@@ -32,6 +33,8 @@ Google Cloud.
 - Each cooked meal shows the recipe, portions and main protein. Meals that are
   new ideas from the web, not from your library, are marked "new idea".
 - A row of chips shows where the plan stands against each rule.
+- One line shows the week's balance and plants ("Balanced week ✓ · 🌱 24 of 30
+  plants"); tapping it lists each check and the plants counted.
 - Tap a meal to see its ingredients (scaled to the portions) and method, change
   portions, swap it or remove it. Swap options that keep your rules come first;
   the others are marked "breaks a rule".
@@ -82,6 +85,8 @@ backend/   Python + FastAPI, runs on Cloud Run.
   app/ai/        The only place that calls Gemini, plus a fake for development.
   app/api/       HTTP routes.
   app/services.py  Use cases that tie the above together.
+  app/standards/  The eat-well numbers and food lists, as data. Placeholder until a
+                 nutritionist reviews them; replacing the file changes the checks.
 firestore.rules  Who may read what directly from the phone.
 ```
 

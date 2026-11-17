@@ -624,6 +624,26 @@ export interface components {
             rule_status?: components["schemas"]["RuleStatus"][];
             /** Open Slots */
             open_slots?: string[];
+            balance?: components["schemas"]["WeekBalance"] | null;
+        };
+        /** BalanceCheck */
+        BalanceCheck: {
+            key: string;
+            label: string;
+            ok: boolean;
+            value: number;
+            target: number;
+            detail: string;
+        };
+        /** WeekBalance */
+        WeekBalance: {
+            balanced: boolean;
+            checks: components["schemas"]["BalanceCheck"][];
+            plants: number;
+            plants_target: number;
+            plant_names: string[];
+            standards_version: string;
+            reviewed: boolean;
         };
         /** Recipe */
         Recipe: {

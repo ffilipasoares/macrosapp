@@ -9,6 +9,7 @@ export type RecipeDraft = Schemas["RecipeDraft"];
 export type Settings = Schemas["Settings"];
 export type Rule = Schemas["Rule"];
 export type Plan = Schemas["PlanOut"];
+export type WeekBalance = Schemas["WeekBalance"];
 export type PlanMeal = Schemas["PlanMeal"];
 export type Alternative = Schemas["Alternative"];
 export type GroceryItem = Schemas["GroceryItem"];

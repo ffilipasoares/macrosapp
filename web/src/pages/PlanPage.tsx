@@ -24,7 +24,7 @@ import { DAY_COLORS, ease, lastCookedLabel, proteinStyle } from "../lib/style";
 import { DAYS, MEALS, addWeeks, defaultWeekId, formatQuantity, isWeekId, weekLabel, weekRange } from "../lib/weeks";
 import { MacrosCard } from "../components/MacrosCard";
 import { perPortion } from "../lib/macros";
-import { CATEGORIES, type Alternative, type Plan, type PlanMeal, type ReferencePortion, type Rule, type Settings } from "../types";
+import { CATEGORIES, type Alternative, type Plan, type PlanMeal, type ReferencePortion, type Rule, type Settings, type WeekBalance } from "../types";
 
 export function PlanPage() {
   const { weekId } = useParams();
@@ -213,6 +213,7 @@ export function PlanPage() {
               )}
 
               <RuleScore plan={plan!} rules={settings?.rules ?? []} />
+              {plan!.balance && Object.keys(meals).length > 0 ? <BalanceCard balance={plan!.balance} /> : null}
 
               <ol className="flex flex-col">
                 {DAYS.map((day, dayIndex) => {
@@ -365,6 +366,49 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
           {short[0].rule!.count - short[0].status.count === 1 ? "One more" : `${short[0].rule!.count - short[0].status.count} more`}{" "}
           {proteinStyle(short[0].rule!.tag).label.toLowerCase()} and every rule is kept.
         </p>
+      ) : null}
+    </section>
+  );
+}
+
+/** One calm line about the week's balance; a tap shows each check and the plants. */
+function BalanceCard({ balance }: { balance: WeekBalance }) {
+  const [open, setOpen] = useState(false);
+  const missing = balance.checks.filter((check) => !check.ok);
+  const plants = Math.floor(balance.plants);
+  return (
+    <section aria-label="Week balance" className="rounded-2xl bg-white/60 px-4 py-3">
+      <button onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center justify-between gap-3 text-left text-sm">
+        <span className="font-semibold">
+          {balance.balanced ? "Balanced week ✓" : missing.length === 1 ? `Nearly balanced: ${missing[0].label.toLowerCase()}` : `${missing.length} things to balance`}
+        </span>
+        <span className="shrink-0 text-ink-soft">
+          🌱 {plants} of {balance.plants_target} plants
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-3 flex flex-col gap-3 text-sm">
+          <ul className="flex flex-col gap-1">
+            {balance.checks.map((check) => (
+              <li key={check.key} className="flex justify-between gap-3">
+                <span className={check.ok ? "" : "font-semibold text-orange"}>
+                  {check.ok ? "✓" : "!"} {check.label}
+                </span>
+                <span className="text-ink-soft">
+                  {check.detail} · {check.key === "red_meat" ? "at most" : "at least"} {check.target}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {balance.plant_names.length ? (
+            <p className="text-ink-soft">
+              <span className="font-medium text-ink">Plants this week:</span> {balance.plant_names.join(", ")}. Herbs and spices count as a quarter.
+            </p>
+          ) : null}
+          {balance.reviewed ? null : (
+            <p className="text-xs text-ink-soft">General guidance, not yet reviewed by a nutritionist. It never changes your plan.</p>
+          )}
+        </div>
       ) : null}
     </section>
   );

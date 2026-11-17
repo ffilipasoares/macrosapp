@@ -9,8 +9,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from app import standards
 from app.ai.base import AIError, RecipeAI
-from app.core import planner
+from app.core import balance, planner
 from app.core.diet import fits, needs_verdict, search_phrase
 from app.core.grocery import build_grocery_lines
 from app.core.ingredients import guess_aisle, normalize_name
@@ -25,6 +26,7 @@ from app.models import (
     Recipe,
     Rule,
     Settings,
+    WeekBalance,
     WeekPlan,
     now,
 )
@@ -90,6 +92,12 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
         if same and meal.recipe.macros is None and saved.macros is not None:
             meal.recipe.ingredients = saved.ingredients
             meal.recipe.refresh_macros()
+
+    out.balance = WeekBalance.model_validate(
+        balance.week_balance(
+            [(slot, meal.recipe) for slot, meal in out.meals.items()], standards.load()
+        )
+    )
     return out
 
 
