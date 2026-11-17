@@ -395,7 +395,7 @@ function BalanceCard({ balance }: { balance: WeekBalance }) {
             ))}
           </ul>
           {balance.reviewed ? null : (
-            <p className="text-xs text-ink-soft">General guidance, not yet reviewed by a nutritionist. It never changes your plan.</p>
+            <p className="text-xs text-ink-soft">General guidance, not yet reviewed by a nutritionist.</p>
           )}
         </div>
       ) : null}

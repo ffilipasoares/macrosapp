@@ -168,6 +168,10 @@ class Rule(BaseModel):
     kind: Literal["min", "max"] = "min"
     count: int = Field(ge=0, le=14)
     tag: str = Field(min_length=1, max_length=40)
+    # Set only on the balanced-week rules, which come from the standards, not from Settings.
+    label: str | None = Field(default=None, exclude=True)
+    also: list[str] = Field(default_factory=list, exclude=True)  # other proteins or tags
+    food_group: str | None = Field(default=None, exclude=True)  # e.g. a meal with vegetables
 
     @field_validator("tag")
     @classmethod

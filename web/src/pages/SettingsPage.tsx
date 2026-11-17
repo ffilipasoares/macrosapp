@@ -147,8 +147,11 @@ export function SettingsPage() {
             </ol>
           </Section>
 
-          <Section title="Rules for the weekly plan" note="Every generated plan follows these. Swaps that would break one are marked.">
-            {rules.length === 0 ? <p className="text-sm text-ink-soft">No rules yet.</p> : null}
+          <Section
+            title="Your own extra rules"
+            note="Optional. Every plan already aims for a balanced week: vegetables most days, fish twice, beans or lentils once, red meat at most twice. Add rules here only for what you want on top, like at least 2 chicken."
+          >
+            {rules.length === 0 ? <p className="text-sm text-ink-soft">None. Plans follow the balanced week.</p> : null}
             <ul className="flex flex-col">
               {rules.map((rule, index) => {
                 const style = proteinStyle(rule.tag);

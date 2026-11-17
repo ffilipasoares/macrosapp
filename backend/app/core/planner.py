@@ -7,12 +7,26 @@ shortfall is reported; nothing here depends on a language model.
 import random
 from collections.abc import Iterable
 
+from app import standards
+from app.core.balance import food_group
 from app.models import Alternative, Recipe, Rule, RuleStatus
 
 
-def matches(recipe: Recipe, tag: str) -> bool:
-    """A rule tag matches a recipe's main protein or any of its tags."""
-    return recipe.protein == tag or tag in recipe.tags
+def matches(recipe: Recipe, rule: Rule | str) -> bool:
+    """A rule matches a recipe's main protein or any of its tags.
+
+    Balanced-week rules can also match several proteins ("fish" or "seafood") or a
+    food group among the ingredients (any vegetable).
+    """
+    if isinstance(rule, str):
+        rule = Rule(count=0, tag=rule)
+    words = {rule.tag, *rule.also}
+    if recipe.protein in words or words & set(recipe.tags):
+        return True
+    if rule.food_group:
+        rules_data = standards.load()
+        return any(food_group(i.name, rules_data) == rule.food_group for i in recipe.ingredients)
+    return False
 
 
 def max_repeats(slot_count: int, max_repeat_ratio: float) -> int:
@@ -20,8 +34,8 @@ def max_repeats(slot_count: int, max_repeat_ratio: float) -> int:
     return int(slot_count * max_repeat_ratio + 1e-9)
 
 
-def _count(recipes: Iterable[Recipe], tag: str) -> int:
-    return sum(1 for recipe in recipes if matches(recipe, tag))
+def _count(recipes: Iterable[Recipe], rule: Rule | str) -> int:
+    return sum(1 for recipe in recipes if matches(recipe, rule))
 
 
 def pick_recipes(
@@ -59,8 +73,7 @@ def pick_recipes(
         if recipe.id in recent_ids and repeats_used >= repeat_budget:
             return False
         return all(
-            not matches(recipe, rule.tag) or _count(chosen, rule.tag) < rule.count
-            for rule in max_rules
+            not matches(recipe, rule) or _count(chosen, rule) < rule.count for rule in max_rules
         )
 
     def add(recipe: Recipe) -> None:
@@ -68,9 +81,9 @@ def pick_recipes(
         chosen_ids.add(recipe.id)
 
     # Hardest rules first: the ones with the fewest matching recipes.
-    for rule in sorted(min_rules, key=lambda rule: _count(recipes, rule.tag)):
-        for recipe in ordered(r for r in recipes if matches(r, rule.tag)):
-            if len(chosen) >= slot_count or _count(chosen, rule.tag) >= rule.count:
+    for rule in sorted(min_rules, key=lambda rule: _count(recipes, rule)):
+        for recipe in ordered(r for r in recipes if matches(r, rule)):
+            if len(chosen) >= slot_count or _count(chosen, rule) >= rule.count:
                 break
             if can_add(recipe):
                 add(recipe)
@@ -95,11 +108,12 @@ def rule_status(
     """Where a plan stands against every rule, for display and for checking swaps."""
     statuses = []
     for rule in rules:
-        count = _count(planned, rule.tag)
+        count = _count(planned, rule)
+        name = rule.label or rule.tag
         if rule.kind == "min":
-            label, ok = f"At least {rule.count} {rule.tag}", count >= rule.count
+            label, ok = f"At least {rule.count} {name}", count >= rule.count
         else:
-            label, ok = f"At most {rule.count} {rule.tag}", count <= rule.count
+            label, ok = f"At most {rule.count} {name}", count <= rule.count
         statuses.append(RuleStatus(label=label, ok=ok, count=count, target=rule.count))
 
     budget = max_repeats(slot_count, max_repeat_ratio)

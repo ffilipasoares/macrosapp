@@ -14,7 +14,8 @@ Google Cloud.
 |---|---|
 | Stop planning from a blank page | Drafts a week of meals from your recipe library every Friday and notifies you |
 | Keep variety | Uses at most 20% of meals from the previous two weeks, preferring recipes cooked longest ago |
-| Follow your own rules | Enforces rules such as "at least 2 chicken and 2 fish meals a week" by counting, and flags a swap that would break one |
+| Eat a balanced week without setting anything up | Plans aim for a balanced week by default: vegetables most days, fish twice, beans or lentils once, red meat at most twice |
+| Add your own preferences | Optional extra rules on top, such as "at least 2 chicken meals a week", enforced by counting; a swap that would break one is flagged |
 | Cook once, eat twice | Lets you set portions per meal (Thursday dinner for 3 covers Friday lunch) and scales recipes to match |
 | Stop writing grocery lists | Merges all ingredients of the approved plan into one list, grouped by aisle, minus what you always have |
 | Add things during the week | Type them in, or say "Hey Siri, add to groceries" |
@@ -24,7 +25,7 @@ Google Cloud.
 | Change a meal fast | A swap button on each meal in the week replaces it in one tap with another recipe that keeps your rules |
 | Know what you eat | Shows calories, protein, carbs and fat per portion for every recipe and planned meal; you choose in Settings whether a portion is one serving or a fixed weight (e.g. 400 g) |
 | Keep recipes recognisable | Add a photo to any recipe; recipes from websites bring their own photo |
-| Eat a balanced week | Checks the week against simple eat-well guidance (vegetables most days, fish twice, legumes once, red meat at most twice, varied proteins). One calm line on the plan; tap it for the details. Guidance only, it never changes the plan |
+| See how balanced the week is | One calm line on the plan ("Balanced week ✓"); tap it to see each check, including varied proteins |
 | Capture a recipe by talking | Record yourself describing it; it is transcribed and turned into a recipe |
 
 ## The screens
@@ -65,8 +66,9 @@ can be combined. Only main dishes are used in the weekly plan.
 **Settings**.
 - *Meals you cook*: for each lunch and dinner of the week, a switch and a
   portion count. Meals switched off stay blank.
-- *Rules*: "at least" or "at most" N meals with a given protein or tag, plus how
-  many weeks to look back for repeats and what share of repeats is allowed.
+- *Your own extra rules*: optional "at least" or "at most" N meals with a given
+  protein or tag, on top of the balanced week, plus how many weeks to look back
+  for repeats and what share of repeats is allowed.
 - *Always in the house*: ingredients left off the generated list.
 - *Friday notification*: turn on push notifications for this phone.
 - *Siri and the share sheet*: the addresses and private key for the two Apple
@@ -84,8 +86,9 @@ backend/   Python + FastAPI, runs on Cloud Run.
   app/ai/        The only place that calls Gemini, plus a fake for development.
   app/api/       HTTP routes.
   app/services.py  Use cases that tie the above together.
-  app/standards/  The eat-well checks and food lists, as data. Placeholder until a
-                 nutritionist reviews them; replacing the file changes the checks.
+  app/standards/  The balanced-week rules and food lists, as data. The planner aims for
+                 them and the plan screen reports them. Placeholder until a nutritionist
+                 reviews them; replacing the file changes both.
 firestore.rules  Who may read what directly from the phone.
 ```
 

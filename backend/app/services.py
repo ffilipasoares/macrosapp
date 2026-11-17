@@ -115,20 +115,20 @@ def _fill_with_suggestions(
     new_ids: set[str] = set()
     min_rules = [rule for rule in settings.rules if rule.kind == "min"]
     max_rules = [rule for rule in settings.rules if rule.kind == "max"]
+    # settings.rules here already holds the balanced-week rules plus the household's own.
     titles = list(library_titles)
 
-    def count(tag: str) -> int:
-        return sum(1 for recipe in picks if planner.matches(recipe, tag))
+    def count(rule: Rule) -> int:
+        return sum(1 for recipe in picks if planner.matches(recipe, rule))
 
     def allowed(recipe: Recipe) -> bool:
         return all(
-            not planner.matches(recipe, rule.tag) or count(rule.tag) < rule.count
-            for rule in max_rules
+            not planner.matches(recipe, rule) or count(rule) < rule.count for rule in max_rules
         )
 
     # What the web has to provide: recipes for each "at least" rule that is short,
     # and enough recipes overall to fill the empty meals. One search covers it all.
-    needs = {rule.tag: rule.count - count(rule.tag) for rule in min_rules}
+    needs = {rule.tag: rule.count - count(rule) for rule in min_rules}
     needs = {tag: missing for tag, missing in needs.items() if missing > 0}
     gaps = max(0, slot_count - len(picks))
     total = max(gaps, sum(needs.values()))
@@ -149,37 +149,46 @@ def _fill_with_suggestions(
         picks.append(recipe)
         new_ids.add(recipe.id)
 
-    for rule in min_rules:
-        for recipe in [r for r in found if planner.matches(r, rule.tag)]:
-            if count(rule.tag) >= rule.count or not allowed(recipe):
-                continue
-            if len(picks) >= slot_count:
-                # No free slot: replace a meal that no "at least" rule depends on.
-                spare = next(
-                    (
-                        index
-                        for index in range(len(picks) - 1, -1, -1)
-                        if not any(planner.matches(picks[index], r.tag) for r in min_rules)
-                    ),
-                    None,
-                )
-                if spare is None:
+    def protein_use(recipe: Recipe) -> int:
+        return sum(1 for p in picks if p.protein == recipe.protein)
+
+    def meet_min_rules(pool: list[Recipe]) -> None:
+        # For each short "at least" rule, take matching recipes, least-used protein first.
+        for rule in min_rules:
+            while count(rule) < rule.count:
+                options = [r for r in pool if planner.matches(r, rule) and allowed(r)]
+                if not options:
                     break
-                picks.pop(spare)
-            take(recipe)
+                if len(picks) >= slot_count:
+                    # No free slot: replace a meal that no "at least" rule depends on.
+                    spare = next(
+                        (
+                            index
+                            for index in range(len(picks) - 1, -1, -1)
+                            if not any(planner.matches(picks[index], r) for r in min_rules)
+                        ),
+                        None,
+                    )
+                    if spare is None:
+                        break
+                    picks.pop(spare)
+                recipe = min(options, key=protein_use)
+                pool.remove(recipe)
+                picks.append(recipe)
+                new_ids.add(recipe.id)
+
+    meet_min_rules(found)
 
     # Fill the rest with variety: each time, the protein used least so far this week.
     while len(picks) < slot_count:
         candidates = [recipe for recipe in found if allowed(recipe)]
         if not candidates:
             break
-        take(
-            min(candidates, key=lambda recipe: sum(1 for p in picks if p.protein == recipe.protein))
-        )
+        take(min(candidates, key=protein_use))
 
     # If some web pages failed to load or did not cover every rule/slot, fill the remaining
     # gaps directly so a single Generate always produces a complete week.
-    remaining_needs = {rule.tag: rule.count - count(rule.tag) for rule in min_rules}
+    remaining_needs = {rule.tag: rule.count - count(rule) for rule in min_rules}
     remaining_needs = {tag: missing for tag, missing in remaining_needs.items() if missing > 0}
     remaining_gaps = max(0, slot_count - len(picks))
     fallback_fn = getattr(ai, "generate_fallback_recipes", None)
@@ -188,7 +197,7 @@ def _fill_with_suggestions(
         and callable(fallback_fn)
         and time.monotonic() < deadline
     ):
-        forbidden = [rule.tag for rule in max_rules if count(rule.tag) >= rule.count]
+        forbidden = [rule.tag for rule in max_rules if count(rule) >= rule.count]
         used_titles = [*titles, *(r.title for r in picks)]
         try:
             extra_drafts = fallback_fn(
@@ -214,25 +223,7 @@ def _fill_with_suggestions(
             log.warning("Fallback recipe generation failed: %s", error)
             extra_found = []
 
-        for rule in min_rules:
-            for recipe in [r for r in extra_found if planner.matches(r, rule.tag)]:
-                if count(rule.tag) >= rule.count or not allowed(recipe):
-                    continue
-                if len(picks) >= slot_count:
-                    spare = next(
-                        (
-                            index
-                            for index in range(len(picks) - 1, -1, -1)
-                            if not any(planner.matches(picks[index], r.tag) for r in min_rules)
-                        ),
-                        None,
-                    )
-                    if spare is None:
-                        break
-                    picks.pop(spare)
-                extra_found.remove(recipe)
-                picks.append(recipe)
-                new_ids.add(recipe.id)
+        meet_min_rules(extra_found)
 
         while len(picks) < slot_count:
             candidates = [recipe for recipe in extra_found if allowed(recipe)]
@@ -275,11 +266,16 @@ def check_diets(
     return None
 
 
+def all_rules(settings: Settings, slot_count: int) -> list[Rule]:
+    """The balanced-week rules from the standards, then the household's own extras."""
+    return [*balance.planner_rules(standards.load(), slot_count), *settings.rules]
+
+
 def _adjusted_rules(rules: list[Rule], kept: list[Recipe]) -> list[Rule]:
     """The rules still to meet once some meals are already decided."""
     adjusted = []
     for rule in rules:
-        already = sum(1 for recipe in kept if planner.matches(recipe, rule.tag))
+        already = sum(1 for recipe in kept if planner.matches(recipe, rule))
         adjusted.append(rule.model_copy(update={"count": max(0, rule.count - already)}))
     return adjusted
 
@@ -311,7 +307,7 @@ def generate_plan(
         notes.append(problem)
     recipes = [r for r in library if fits(settings.diets, r) and r.id not in kept_ids]
     recent = recent_recipe_ids(repo, household_id, week_id, settings)
-    rules = _adjusted_rules(settings.rules, kept_recipes)
+    rules = _adjusted_rules(all_rules(settings, len(settings.cook_slots())), kept_recipes)
     open_settings = settings.model_copy(update={"rules": rules})
 
     picks = planner.pick_recipes(recipes, len(slots), rules, recent, settings.max_repeat_ratio, rng)
@@ -444,7 +440,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
         slot,
         repo.list_recipes(household_id),  # the whole library: choosing a meal is always free
         slot_count,
-        settings.rules,
+        all_rules(settings, slot_count),
         recent_recipe_ids(repo, household_id, week_id, settings),
         settings.max_repeat_ratio,
     )

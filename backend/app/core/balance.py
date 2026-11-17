@@ -9,6 +9,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
+from app.models import Rule
 from app.standards import Standards
 
 
@@ -92,3 +93,33 @@ def week_balance(meals: Iterable[tuple[str, Any]], standards: Standards) -> dict
         "standards_version": standards.version,
         "reviewed": standards.reviewed_by is not None,
     }
+
+
+def planner_rules(standards: Standards, slot_count: int) -> list[Rule]:
+    """The balance checks the planner can aim for, as counting rules.
+
+    "Vegetables most days" becomes vegetables in that share of the meals. The
+    variety of proteins is not a rule: the planner already spreads proteins.
+    """
+    checks = standards.checks
+    rules = []
+    if (check := checks.get("vegetable_days")) and check.min_share_of_days:
+        count = math.ceil(check.min_share_of_days * slot_count)
+        rules.append(
+            Rule(kind="min", count=count, tag="vegetables", food_group="vegetables",
+                 label=check.label.lower())
+        )  # fmt: skip
+    if (check := checks.get("fish")) and check.min_meals:
+        fish = standards.proteins.get("fish", [])
+        rules.append(Rule(kind="min", count=check.min_meals, tag="fish", also=fish, label="fish"))
+    if (check := checks.get("legumes")) and check.min_meals:
+        rules.append(
+            Rule(kind="min", count=check.min_meals, tag="legumes", food_group="legumes",
+                 label="beans, lentils or chickpeas")
+        )  # fmt: skip
+    if (check := checks.get("red_meat")) and check.max_meals is not None:
+        red = standards.proteins.get("red_meat", [])
+        rules.append(
+            Rule(kind="max", count=check.max_meals, tag="red meat", also=red, label="red meat")
+        )
+    return [rule for rule in rules if 0 <= rule.count <= 14]

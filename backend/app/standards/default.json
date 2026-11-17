@@ -1,7 +1,7 @@
 {
   "version": "placeholder-2026-11",
   "reviewed_by": null,
-  "note": "Placeholder guidance written before review by a nutritionist. Replace the numbers and food lists with the nutritionist's criteria; the code reads them from here.",
+  "note": "Placeholder guidance written before review by a nutritionist. Replace the numbers and food lists with the nutritionist's criteria; the code reads them from here. Onion, garlic and shallot are flavourings here, not a vegetable serving.",
   "checks": {
     "vegetable_days": {
       "label": "Vegetables most days",
@@ -51,11 +51,7 @@
       "fava"
     ],
     "vegetables": [
-      "onion",
-      "shallot",
       "leek",
-      "garlic",
-      "spring onion",
       "tomato",
       "carrot",
       "pepper",

@@ -299,7 +299,12 @@ def test_fallback_recipes_fill_what_the_web_could_not_and_follow_the_diets():
     client = make(ai)  # the web returns nothing usable in these tests
     set_settings(client, diets=["mediterranean", "high-protein"])
     plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
-    assert ai.asked == ({}, 5, "mediterranean and high-protein")
+    # Nothing in the library: the balanced week is what the written recipes must cover.
+    assert ai.asked == (
+        {"vegetables": 4, "fish": 2, "legumes": 1},
+        5,
+        "mediterranean and high-protein",
+    )
     assert len(plan["meals"]) == 5 and all(meal["is_new"] for meal in plan["meals"].values())
     assert all(
         meal["recipe"]["diet_fit"] == {"mediterranean": True, "high-protein": True}

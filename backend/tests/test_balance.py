@@ -93,3 +93,69 @@ def test_the_plan_returns_its_balance():
     assert "plants" not in balance
     assert balance["standards_version"].startswith("placeholder")
     assert {c["key"] for c in balance["checks"]} >= {"fish", "legumes", "red_meat"}
+
+
+def _client():
+    return TestClient(
+        create_app(
+            config=Config(push_enabled=False),
+            repo=MemoryRepo(),
+            ai=None,
+            notifier=LogNotifier(),
+            verify_token=lambda t: {"uid": t, "email": "a@example.com", "email_verified": True},
+        )
+    )
+
+
+def _dinners_only(client, auth, rules):
+    settings = client.get("/api/settings", headers=auth).json()
+    settings["rules"] = rules
+    settings["slots"] = {
+        key: {"cook": key.endswith("dinner") and key[:3] in ("mon", "tue", "wed", "thu", "fri"),
+              "portions": 2}
+        for key in settings["slots"]
+    }  # fmt: skip
+    client.put("/api/settings", json=settings, headers=auth)
+
+
+def _add(client, auth, title, protein, *ingredients):
+    body = {
+        "title": title,
+        "protein": protein,
+        "ingredients": [{"name": n, "quantity": 1} for n in ingredients],
+    }
+    client.post("/api/recipes", json=body, headers=auth)
+
+
+def _library(client, auth):
+    for n in range(6):
+        _add(client, auth, f"Steak {n}", "beef", "beef", "chips")
+    for n in range(2):
+        _add(client, auth, f"Salmon {n}", "fish", "salmon", "broccoli")
+    _add(client, auth, "Lentil soup", "vegetarian", "lentils", "carrot")
+    _add(client, auth, "Chicken salad", "chicken", "chicken", "lettuce")
+
+
+def test_the_planner_aims_for_a_balanced_week_without_any_own_rules():
+    client, auth = _client(), {"Authorization": "Bearer ana"}
+    _dinners_only(client, auth, [])
+    _library(client, auth)
+    for _ in range(5):
+        plan = client.post("/api/plans/2026-11-16/generate", headers=auth).json()
+        proteins = [m["recipe"]["protein"] for m in plan["meals"].values()]
+        assert proteins.count("fish") == 2
+        assert proteins.count("beef") <= 2
+        assert "Lentil soup" in [m["recipe"]["title"] for m in plan["meals"].values()]
+        assert plan["balance"]["balanced"], plan["balance"]["checks"]
+        # Only the household's own rules appear among the rule chips.
+        assert [s["label"] for s in plan["rule_status"]] == ["At most 1 repeated from recent weeks"]
+
+
+def test_own_rules_are_extras_on_top_of_the_balanced_week():
+    client, auth = _client(), {"Authorization": "Bearer ana"}
+    _dinners_only(client, auth, [{"kind": "min", "count": 1, "tag": "chicken"}])
+    _library(client, auth)
+    plan = client.post("/api/plans/2026-11-16/generate", headers=auth).json()
+    titles = [m["recipe"]["title"] for m in plan["meals"].values()]
+    assert "Chicken salad" in titles and "Lentil soup" in titles
+    assert sum(t.startswith("Salmon") for t in titles) == 2

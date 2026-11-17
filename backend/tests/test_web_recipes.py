@@ -384,7 +384,9 @@ def test_one_search_covers_every_rule_and_empty_meal():
     plan = client.post("/api/plans/2026-11-16/generate", headers=auth).json()
     assert len(ai.queries) == 1
     query, count = ai.queries[0]
-    assert "at least 2 with fish" in query and "at least 1 with chicken" in query and count == 7
+    assert "at least 2 with fish" in query and "at least 1 with chicken" in query
+    # The balanced week asks for 4 meals with vegetables, 2 fish, 1 legumes; plus own rules.
+    assert "at least 4 with vegetables" in query and count == 10
     assert len(plan["meals"]) == 5 and all(meal["is_new"] for meal in plan["meals"].values())
     assert all(status["ok"] for status in plan["rule_status"])
 
