@@ -59,6 +59,7 @@ def create_app(
     read_link: Callable[[str], object] | None = None,
     read_image: Callable[[str], tuple[bytes, str]] | None = None,
     image_store: object | None = None,
+    queue: object | None = None,
 ) -> FastAPI:
     config = config or Config()
     # The interactive API pages are switched off: there is no need to advertise the API.
@@ -105,6 +106,27 @@ def create_app(
         else:
             notifier = LogNotifier()
     app.state.notifier = notifier
+
+    # Plans are made in the background through Cloud Tasks when it is set up; otherwise
+    # straight away, within the request.
+    if queue is None:
+        from app import services as plan_services
+        from app.tasks import CloudTasksQueue, InlineQueue
+
+        if config.tasks_queue and config.tasks_url:
+            queue = CloudTasksQueue(config.tasks_queue, config.tasks_url, config.job_token)
+        else:
+            queue = InlineQueue(
+                lambda job: plan_services.run_plan_job(
+                    app.state.repo,
+                    app.state.ai,
+                    app.state.web,
+                    app.state.notifier,
+                    config.app_url,
+                    job,
+                )
+            )
+    app.state.queue = queue
 
     for router in (
         recipes.router,

@@ -41,6 +41,7 @@ from app.models import (
 )
 from app.notify import Notifier
 from app.repo.base import Repo
+from app.tasks import JobQueue, PlanJob, QueueError
 from app.web_recipes import find_web_recipes
 
 log = logging.getLogger(__name__)
@@ -705,6 +706,7 @@ def run_weekly_job(
     rng: random.Random | None = None,
     web: Web | None = None,
     now: datetime | None = None,
+    queue: JobQueue | None = None,
 ) -> dict[str, int]:
     """Draft next week's plan for every household whose chosen day and hour have come.
 
@@ -729,17 +731,15 @@ def run_weekly_job(
                 continue
             target = next_week_id(local_now.date())
             existing = repo.get_plan(household.id, target)
-            if existing is not None and not existing.pending:
+            if existing is not None and (not existing.pending or is_generating(existing)):
                 summary["skipped"] += 1
                 continue
-            generate_plan(repo, ai, household.id, target, rng or random.Random(), web)
-            invalid = notifier.send(
-                household.device_tokens,
-                i18n.t(settings.language, "plan_ready_title"),
-                i18n.t(settings.language, "plan_ready_body"),
-                f"{app_url}/plan/{target}" if app_url else "",
-            )
-            repo.remove_device_tokens(household.id, invalid)
+            job = PlanJob(household_id=household.id, week_id=target, notify=True)
+            if queue is None:
+                mark_generating(repo, household.id, target)
+                run_plan_job(repo, ai, web, notifier, app_url, job, rng)
+            else:
+                start_plan_job(repo, queue, job)
             summary["generated"] += 1
         except Exception:
             log.exception("Weekly plan failed for household %s", household.id)
@@ -1139,3 +1139,76 @@ def draft_for_household(
         return draft
     translated = in_language(ai, [Recipe(**draft.model_dump())], lang)[0]
     return RecipeDraft.model_validate(translated.model_dump(include=set(RecipeDraft.model_fields)))
+
+
+# Plans made in the background -------------------------------------------------------------
+
+STALE_AFTER = timedelta(minutes=15)
+
+
+def is_generating(plan: WeekPlan) -> bool:
+    """Being made right now. A job that never finished stops counting after a while."""
+    return plan.generating_since is not None and now() - plan.generating_since < STALE_AFTER
+
+
+def mark_generating(repo: Repo, household_id: str, week_id: str) -> WeekPlan:
+    plan = repo.get_plan(household_id, week_id) or WeekPlan(week_id=week_id, pending=True)
+    plan.generating_since, plan.generation_error = now(), None
+    repo.save_plan(household_id, plan)
+    return plan
+
+
+def start_plan_job(repo: Repo, queue: JobQueue, job: PlanJob) -> WeekPlan:
+    """Mark the week as being planned and queue the work. Already running: nothing new."""
+    plan = repo.get_plan(job.household_id, job.week_id)
+    if plan is not None and is_generating(plan):
+        return plan
+    if job.mode == "apply_diets" and plan is None:
+        raise NotFound("There is no plan for this week yet")
+    mark_generating(repo, job.household_id, job.week_id)
+    try:
+        queue.enqueue(job)
+    except QueueError as error:
+        failed = repo.get_plan(job.household_id, job.week_id)
+        if failed is not None:
+            failed.generating_since, failed.generation_error = None, str(error)
+            repo.save_plan(job.household_id, failed)
+        raise
+    return repo.get_plan(job.household_id, job.week_id) or WeekPlan(week_id=job.week_id)
+
+
+def run_plan_job(
+    repo: Repo,
+    ai: RecipeAI | None,
+    web: Web | None,
+    notifier: Notifier | None,
+    app_url: str,
+    job: PlanJob,
+    rng: random.Random | None = None,
+) -> None:
+    """Make the plan. A failure is kept on the week so the app can say so and offer a retry."""
+    rng = rng or random.Random()
+    settings = repo.get_settings(job.household_id)
+    try:
+        if job.mode == "apply_diets":
+            apply_diets(repo, ai, job.household_id, job.week_id, rng, web)
+        else:
+            generate_plan(repo, ai, job.household_id, job.week_id, rng, web)
+    except Exception:
+        log.exception("Plan job failed for household %s, week %s", job.household_id, job.week_id)
+        plan = repo.get_plan(job.household_id, job.week_id)
+        if plan is not None:
+            plan.generating_since = None
+            plan.generation_error = i18n.t(settings.language, "plan_failed")
+            repo.save_plan(job.household_id, plan)
+        return
+    if job.notify and notifier is not None:
+        household = next((h for h in repo.list_households() if h.id == job.household_id), None)
+        if household is not None:
+            invalid = notifier.send(
+                household.device_tokens,
+                i18n.t(settings.language, "plan_ready_title"),
+                i18n.t(settings.language, "plan_ready_body"),
+                f"{app_url}/plan/{job.week_id}" if app_url else "",
+            )
+            repo.remove_device_tokens(household.id, invalid)

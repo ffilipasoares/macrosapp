@@ -290,6 +290,10 @@ class WeekPlan(BaseModel):
     pending: bool = False
     # The bought groceries for this week were put away in the pantry.
     put_away: bool = False
+    # Being made in the background since then; cleared when the new plan is saved.
+    generating_since: datetime | None = None
+    # Why the last background attempt failed, shown so it can be tried again.
+    generation_error: str | None = None
 
 
 class RuleStatus(BaseModel):

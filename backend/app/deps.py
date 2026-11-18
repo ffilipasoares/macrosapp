@@ -11,6 +11,7 @@ from app.models import Household
 from app.notify import Notifier
 from app.repo.base import Repo
 from app.services import Web
+from app.tasks import JobQueue
 
 
 def get_repo(request: Request) -> Repo:
@@ -27,6 +28,10 @@ def get_notifier(request: Request) -> Notifier:
 
 def get_web(request: Request):
     return request.app.state.web
+
+
+def get_queue(request: Request):
+    return request.app.state.queue
 
 
 def get_optional_ai(request: Request) -> RecipeAI | None:
@@ -89,3 +94,4 @@ OptionalAIDep = Annotated[RecipeAI | None, Depends(get_optional_ai)]
 ConfigDep = Annotated[Config, Depends(get_config)]
 NotifierDep = Annotated[Notifier, Depends(get_notifier)]
 WebDep = Annotated["Web", Depends(get_web)]
+QueueDep = Annotated["JobQueue", Depends(get_queue)]

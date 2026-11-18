@@ -19,6 +19,7 @@ from app.deps import (
     ConfigDep,
     NotifierDep,
     OptionalAIDep,
+    QueueDep,
     RepoDep,
     ShortcutHousehold,
     WebDep,
@@ -27,6 +28,7 @@ from app.deps import (
 from app.images import keep_own_copy
 from app.models import Recipe, RecipeDraft
 from app.repo.base import Repo
+from app.tasks import PlanJob
 
 router = APIRouter(tags=["integrations"])
 
@@ -120,7 +122,28 @@ def share_recipe_link(
 
 @router.post("/jobs/weekly-plan", dependencies=[Depends(scheduler_only)])
 def weekly_plan(
-    repo: RepoDep, ai: OptionalAIDep, notifier: NotifierDep, config: ConfigDep, web: WebDep
+    repo: RepoDep,
+    ai: OptionalAIDep,
+    notifier: NotifierDep,
+    config: ConfigDep,
+    web: WebDep,
+    queue: QueueDep,
 ) -> dict[str, int]:
-    """Called by Cloud Scheduler every Friday."""
-    return services.run_weekly_job(repo, ai, notifier, config.app_url, web=web)
+    """Called by Cloud Scheduler every hour: queues the plans of households whose day has
+    come."""
+    return services.run_weekly_job(repo, ai, notifier, config.app_url, web=web, queue=queue)
+
+
+@router.post("/jobs/plan", dependencies=[Depends(scheduler_only)])
+def plan_job(
+    job: PlanJob,
+    repo: RepoDep,
+    ai: OptionalAIDep,
+    notifier: NotifierDep,
+    config: ConfigDep,
+    web: WebDep,
+) -> dict[str, bool]:
+    """Called by Cloud Tasks: make one household's plan. Always answers 200, so a plan that
+    failed is not retried over and over; the failure is kept on the week instead."""
+    services.run_plan_job(repo, ai, web, notifier, config.app_url, job)
+    return {"done": True}

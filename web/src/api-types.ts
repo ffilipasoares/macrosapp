@@ -678,6 +678,10 @@ export interface components {
             rule_status?: components["schemas"]["RuleStatus"][];
             /** Open Slots */
             open_slots?: string[];
+            /** Generating Since: being made in the background since then */
+            generating_since?: string | null;
+            /** Generation Error: why the last background attempt failed */
+            generation_error?: string | null;
             balance?: components["schemas"]["WeekBalance"] | null;
         };
         /** BalanceCheck */

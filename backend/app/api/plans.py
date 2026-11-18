@@ -7,8 +7,9 @@ from pydantic import BaseModel, Field
 
 from app import services
 from app.core.weeks import parse_week_id
-from app.deps import CurrentHousehold, OptionalAIDep, RepoDep, WebDep
+from app.deps import CurrentHousehold, OptionalAIDep, QueueDep, RepoDep, WebDep
 from app.models import Alternative, PlanOut
+from app.tasks import PlanJob, QueueError
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 
@@ -37,12 +38,23 @@ def get_plan(week_id: str, household: CurrentHousehold, repo: RepoDep) -> PlanOu
     return services.plan_out(repo, household.id, plan) if plan else None
 
 
+def _start(repo, queue, household_id: str, week_id: str, mode: str) -> PlanOut:
+    """Queue the plan and answer at once. The app shows "Planning your week…" while
+    ``generating_since`` is set, and asks again until the new plan is there."""
+    job = PlanJob(household_id=household_id, week_id=week_id, mode=mode)  # type: ignore[arg-type]
+    try:
+        plan = services.start_plan_job(repo, queue, job)
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+    except QueueError as error:
+        raise HTTPException(503, str(error)) from error
+    return services.plan_out(repo, household_id, plan)
+
+
 @router.post("/{week_id}/generate")
-def generate(
-    week_id: str, household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep, web: WebDep
-) -> PlanOut:
-    plan = services.generate_plan(repo, ai, household.id, _week(week_id), random.Random(), web)
-    return services.plan_out(repo, household.id, plan)
+def generate(week_id: str, household: CurrentHousehold, repo: RepoDep, queue: QueueDep) -> PlanOut:
+    """Make a new plan for the week, in the background."""
+    return _start(repo, queue, household.id, _week(week_id), "generate")
 
 
 @router.put("/{week_id}/meals/{slot}")
@@ -60,14 +72,11 @@ def set_meal(
 
 @router.post("/{week_id}/apply-diets")
 def apply_diets(
-    week_id: str, household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep, web: WebDep
+    week_id: str, household: CurrentHousehold, repo: RepoDep, queue: QueueDep
 ) -> PlanOut:
-    """Update an existing plan for the current diets, keeping the meals that already fit."""
-    try:
-        plan = services.apply_diets(repo, ai, household.id, _week(week_id), random.Random(), web)
-    except services.NotFound as error:
-        raise HTTPException(404, str(error)) from error
-    return services.plan_out(repo, household.id, plan)
+    """Update an existing plan for the current diets, keeping the meals that fit; in the
+    background."""
+    return _start(repo, queue, household.id, _week(week_id), "apply_diets")
 
 
 class MealMove(BaseModel):

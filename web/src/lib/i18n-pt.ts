@@ -272,6 +272,7 @@ export const PT: Record<string, string> = {
   "Pescatarian": "Pescetariana",
   "Photo": "Foto",
   "Photo of the fridge": "Foto do frigorífico",
+  "Picking from your recipes and finding new ones on the web. This can take a few minutes; you can leave this screen and come back.": "A escolher das tuas receitas e a procurar novas na web. Pode demorar alguns minutos; podes sair deste ecrã e voltar depois.",
   "Picking from your recipes and finding new ones on the web. This can take up to two minutes.": "A escolher das tuas receitas e a procurar novas na web. Pode demorar até dois minutos.",
   "Plan": "Plano",
   "Plan the week, get the grocery list.": "Planeia a semana, recebe a lista de compras.",

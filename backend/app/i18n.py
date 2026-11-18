@@ -68,6 +68,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "pt": "Só foi possível preencher {filled} de {total} refeições com receitas que respeitam "
         "as tuas dietas, alergias e regras. Junta mais receitas ou escolhe tu as que faltam.",
     },
+    "plan_failed": {
+        "en": "The plan could not be made this time. Try again in a minute.",
+        "pt": "Não foi possível fazer o plano desta vez. Tenta de novo daqui a um minuto.",
+    },
     "approve_again": {
         "en": "Approve the plan again to update your grocery list.",
         "pt": "Aprova o plano de novo para atualizar a lista de compras.",

@@ -59,6 +59,24 @@ export function PlanPage() {
     };
   }, [weekId, valid]);
 
+  // Plans are made in the background: while one is being made, ask again every few
+  // seconds until it is there. A job that never finished stops counting after 15 minutes.
+  const generating =
+    !!plan?.generating_since && Date.now() - new Date(plan.generating_since).getTime() < 15 * 60 * 1000;
+  useEffect(() => {
+    if (!generating || !valid) return;
+    const timer = window.setInterval(() => {
+      api
+        .getPlan(weekId)
+        .then((latest) => {
+          setPlan(latest);
+          if (latest && !latest.generating_since) setListCount(null);
+        })
+        .catch(() => undefined); // keep trying; a passing network blip is not an error here
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [generating, valid, weekId]);
+
   const closeMeal = useCallback(() => setOpenSlot(null), []);
   const [swapping, setSwapping] = useState<string | null>(null);
 
@@ -139,7 +157,8 @@ export function PlanPage() {
   const hasMeals = Object.keys(meals).length > 0;
   const cookSlots = new Set(Object.entries(settings?.slots ?? {}).filter(([, slot]) => slot.cook).map(([key]) => key));
   const visibleSlots = new Set([...cookSlots, ...Object.keys(meals)]);
-  const showEmpty = !loading && (!plan || busy === "generate");
+  const planning = busy === "generate" || generating;
+  const showEmpty = !loading && (!plan || planning || Object.keys(plan.meals ?? {}).length === 0);
   const today = new Date();
 
   return (
@@ -174,7 +193,19 @@ export function PlanPage() {
           {loading ? (
             <Loading label={t("Loading the plan")} />
           ) : showEmpty ? (
-            <EmptyWeek planning={busy === "generate"} onGenerate={generate} />
+            <>
+              {plan?.generation_error && !planning ? (
+                <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">{plan.generation_error}</p>
+              ) : null}
+              {(plan?.notes ?? []).length && !planning ? (
+                (plan!.notes ?? []).map((note) => (
+                  <p key={note} className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">
+                    {note}
+                  </p>
+                ))
+              ) : null}
+              <EmptyWeek planning={planning} onGenerate={generate} />
+            </>
           ) : (
             <>
               {plan!.status === "approved" ? (
@@ -190,6 +221,10 @@ export function PlanPage() {
                   </span>
                   <ChevronRight size={20} className="shrink-0 text-ink-soft" />
                 </Link>
+              ) : null}
+
+              {plan!.generation_error ? (
+                <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">{plan!.generation_error}</p>
               ) : null}
 
               {(plan!.notes ?? []).map((note) => (
@@ -544,7 +579,7 @@ function EmptyWeek({ planning, onGenerate }: { planning: boolean; onGenerate: ()
       <h2 className="text-xl font-bold">{planning ? t("Planning your week…") : t("No plan for this week yet")}</h2>
       <p className="max-w-xs text-sm text-ink-soft">
         {planning
-          ? t("Picking from your recipes and finding new ones on the web. This can take up to two minutes.")
+          ? t("Picking from your recipes and finding new ones on the web. This can take a few minutes; you can leave this screen and come back.")
           : t("Generate one from your recipes and rules. A plan for next week is also drafted on the day set in Settings.")}
       </p>
       <button onClick={onGenerate} disabled={planning} className={`mt-2 ${primaryButton}`}>

@@ -100,6 +100,39 @@ gcloud run services update mealplan-api --region europe-west1 --update-env-vars 
 `WEB_SEARCH_SECONDS` is how long the web search may run. The default is 50, which
 fits through Hosting; raise it only once `VITE_API_URL` is set and deployed.
 
+## 3c. Make plans in the background (Cloud Tasks)
+
+Making a plan can take a few minutes when it searches the web. Without this step the
+app makes it within one request, and Firebase Hosting stops a request after a minute
+(error 504). With it, tapping Generate returns at once, the app shows "Planning your
+week…", and Cloud Tasks runs the work separately, calling Cloud Run directly. Once:
+
+```bash
+gcloud services enable cloudtasks.googleapis.com
+```
+
+```bash
+gcloud tasks queues create plans --location europe-west1 --max-attempts 2
+```
+
+Let the backend add tasks (use the service account Cloud Run runs as, shown under
+Cloud Run → mealplan-api → Security; by default the Compute Engine default account):
+
+```bash
+gcloud projects add-iam-policy-binding PROJECT --member "serviceAccount:SERVICE_ACCOUNT" --role roles/cloudtasks.enqueuer
+```
+
+Then tell the backend about the queue and its own address, and give it time to run
+a plan (15 minutes):
+
+```bash
+gcloud run services update mealplan-api --region europe-west1 --timeout 900 --update-env-vars "TASKS_QUEUE=projects/PROJECT/locations/europe-west1/queues/plans,TASKS_URL=https://YOUR-CLOUD-RUN-URL,WEB_SEARCH_SECONDS=120"
+```
+
+`TASKS_URL` is the Cloud Run address printed in step 2, not the web.app one. The
+weekly job uses the same queue, one task per household. Tasks reach the backend with
+the same `JOB_TOKEN` as the scheduler.
+
 ## 4. Schedule the weekly plan
 
 Each household chooses the day and hour its plan is ready (Settings, default Friday

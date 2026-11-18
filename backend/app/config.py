@@ -41,3 +41,9 @@ class Config:
         ]
     )
     push_enabled: bool = field(default_factory=lambda: os.getenv("PUSH_ENABLED", "true") == "true")
+    # Plans are made in the background through this Cloud Tasks queue, e.g.
+    # "projects/PROJECT/locations/europe-west1/queues/plans", which calls the backend at
+    # TASKS_URL (its Cloud Run address, not the web.app one). Without them, a plan is
+    # made within the request, as before.
+    tasks_queue: str = field(default_factory=lambda: os.getenv("TASKS_QUEUE", ""))
+    tasks_url: str = field(default_factory=lambda: os.getenv("TASKS_URL", "").rstrip("/"))
