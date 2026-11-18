@@ -9,6 +9,7 @@ import {
   Dots,
   ErrorNote,
   Loading,
+  AiIdea,
   NewIdea,
   Overlay,
   ProteinDot,
@@ -545,7 +546,7 @@ function MealRow({
           <ProteinDot protein={meal.recipe.protein} />
           <span>{tn(meal.portions, "{n} portion", "{n} portions")}</span>
           {meal.recipe.macros ? <span>{perPortion(meal.recipe.macros, meal.recipe.servings ?? 1, reference).kcal} kcal</span> : null}
-          {meal.is_new ? <NewIdea /> : null}
+          {meal.is_new ? meal.recipe.source_url ? <NewIdea /> : <AiIdea /> : null}
         </span>
         {meal.carried_from || (meal.uses_pantry ?? []).length ? (
           <span className="mt-0.5 block truncate text-xs text-green">
@@ -807,8 +808,13 @@ function MealScreen({
               {recipe.prep_minutes ? `${recipe.prep_minutes} min · ` : ""}
               {lastCookedLabel(recipe.last_planned_week, today)}
             </span>
-            {meal!.is_new ? <NewIdea /> : null}
+            {meal!.is_new ? meal!.recipe.source_url ? <NewIdea /> : <AiIdea /> : null}
           </div>
+          {meal!.is_new && !meal!.recipe.source_url ? (
+            <p className="mt-2 rounded-2xl bg-mustard-soft px-3 py-2 text-sm">
+              {t("No recipe website had a good match for this meal, so the app wrote this one. Check the amounts before cooking, or swap it.")}
+            </p>
+          ) : null}
           {(meal!.reasons ?? []).length ? (
             <p className="mt-2 text-sm text-ink-soft">
               <span className="font-semibold text-ink">{t("Why this:")}</span> {meal!.reasons!.join(" · ")}

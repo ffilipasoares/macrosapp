@@ -187,7 +187,9 @@ def _fill_with_suggestions(
         return picks, new_ids
     query = search_phrase(settings.planning_needs(), needs, wishes)
     # Ask for a couple more than needed, since some pages will not work.
-    drafts = find_web_recipes(ai, web.read_link, query, total + 2, titles, deadline)
+    # Ask for a few more than needed: some pages will not work, and those with a photo
+    # are preferred.
+    drafts = find_web_recipes(ai, web.read_link, query, total + 4, titles, deadline)
     found = []
     for draft in drafts:
         # Found by a search for these diets, so they count as fitting them.
@@ -200,6 +202,10 @@ def _fill_with_suggestions(
         found.remove(recipe)
         picks.append(recipe)
         new_ids.add(recipe.id)
+
+    def best(recipe: Recipe) -> tuple[bool, int]:
+        # A recipe with a photo first, then the least-used protein this week.
+        return (not recipe.image_url, protein_use(recipe))
 
     def protein_use(recipe: Recipe) -> int:
         return sum(1 for p in picks if p.protein == recipe.protein)
@@ -224,7 +230,7 @@ def _fill_with_suggestions(
                     if spare is None:
                         break
                     picks.pop(spare)
-                recipe = min(options, key=protein_use)
+                recipe = min(options, key=best)
                 pool.remove(recipe)
                 picks.append(recipe)
                 new_ids.add(recipe.id)
@@ -236,7 +242,7 @@ def _fill_with_suggestions(
         candidates = [recipe for recipe in found if allowed(recipe)]
         if not candidates:
             break
-        take(min(candidates, key=protein_use))
+        take(min(candidates, key=best))
 
     # If some web pages failed to load or did not cover every rule/slot, fill the remaining
     # gaps directly so a single Generate always produces a complete week.

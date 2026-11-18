@@ -152,6 +152,11 @@ export function ProteinDot({ protein, withLabel = true }: { protein?: string | n
   );
 }
 
+/** A new idea the app wrote itself, with no recipe website behind it: the last resort. */
+export function AiIdea() {
+  return <span className="rounded-full bg-mustard-soft px-2 py-0.5 text-xs font-semibold text-ink">{t("Written by AI")}</span>;
+}
+
 export function NewIdea() {
   return <span className="rounded-full bg-periwinkle-soft px-2 py-0.5 text-xs font-semibold text-ink">{t("New idea")}</span>;
 }

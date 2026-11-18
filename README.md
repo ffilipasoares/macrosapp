@@ -12,6 +12,7 @@ Google Cloud.
 
 | You want to | The app |
 |---|---|
+| See new ideas before cooking them | New recipes come from real recipe websites only (never code sites, forums or social media), those with a photo first. Recipes written by AI are the last resort, only for meals still empty, and are labelled "Written by AI" |
 | Never wait on a frozen screen | Plans are made in the background (Cloud Tasks): the app shows "Planning your week…" and the plan appears when ready, even after leaving the screen |
 | Stop planning from a blank page | Drafts next week's meals on the day and hour you choose (Friday 17:00 by default) and notifies you |
 | Use the app in Portuguese or English | One language per household, chosen in the first-use setup (it starts from the phone's language) and in Settings. Screens, recipes, the grocery list, plan notes and notifications follow it. Recipes are translated once by AI; ingredient names stay English underneath, so allergies, the pantry and packs keep matching |

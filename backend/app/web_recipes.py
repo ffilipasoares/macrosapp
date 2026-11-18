@@ -139,7 +139,7 @@ def find_web_recipes(
     found: list[RecipeDraft] = []
     seen_pages: set[str] = set()
     for draft in drafts:  # in search order, so the best matches come first
-        if draft is None or len(found) >= count:
+        if draft is None:
             continue
         key = draft.title.strip().lower()
         if key in avoid or draft.source_url in seen_pages:
@@ -147,4 +147,7 @@ def find_web_recipes(
         avoid.add(key)
         seen_pages.add(draft.source_url or "")
         found.append(draft)
-    return found
+    # People choose more easily what they can see: recipes with a photo first, then the
+    # rest, each in search order.
+    found.sort(key=lambda draft: not draft.image_url)
+    return found[:count]

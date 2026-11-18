@@ -34,7 +34,7 @@ about 110 households paying €6.99 a month after a 7-day trial.
 |---|---|
 | Recipes | Import from links (sites, TikTok), screenshots, voice, saved videos, pasted text, or typed; photos; types (main, dessert…); macros per portion; ♥ and "Not for us" |
 | First-use setup | Language, people, meals cooked, plan day and hour, cooking time, diets, allergies, foods never eaten, equipment, staples, first recipe link, first plan |
-| Planning | Made in the background (Cloud Tasks). Order: allergies/diets/equipment → cooking time per day → variety (nothing from last week, ≤ half from two weeks ago) → balanced week (placeholder standards) → own extra rules → taste + food at home (1 in 5 new) |
+| Planning | New ideas: own recipes first, then real recipe websites with a photo, then without, then written by AI (labelled, last resort). Made in the background (Cloud Tasks). Order: allergies/diets/equipment → cooking time per day → variety (nothing from last week, ≤ half from two weeks ago) → balanced week (placeholder standards) → own extra rules → taste + food at home (1 in 5 new) |
 | Plan screen | Drag and drop, swap button, free choice of any recipe, "Why this", ♥ / Not for us, "I'm not cooking this" (moves to next week, food stays at home), balance line, diets-changed banner |
 | Groceries | Live shared list (Firestore), offline, grouped by aisle, pack sizes ("1 bag (300 g)"), skips food at home, Siri, Put away → pantry |
 | Pantry ("At home") | Add by text, voice, fridge photos; use-by estimates; meals taken out as days pass; leftovers favoured in plans |

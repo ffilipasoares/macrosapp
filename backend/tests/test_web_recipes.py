@@ -94,20 +94,15 @@ def test_only_working_pages_with_a_recipe_are_kept():
         ]
     )
     found = find_web_recipes(ai, reader, "healthy fish dinner", 3, ["Salmon bowl"])
-    # Broken page, list page, a recipe you already have and a duplicate are skipped.
-    assert [draft.title for draft in found] == ["Fish soup", "Fish tacos", "Fish pie"]
-    assert [draft.source_url for draft in found] == [
-        "https://good.example/no-photo",
-        "https://good.example/fish-1",
-        "https://good.example/fish-2",
-    ]
+    # Broken page, list page, a recipe you already have and a duplicate are skipped,
+    # and recipes with a photo come before the one without.
+    assert [draft.title for draft in found] == ["Fish tacos", "Fish pie", "Grilled fish"]
     assert all(draft.ingredients for draft in found)
-    # A page without a photo is kept; the others bring theirs.
-    assert [draft.image_url for draft in found] == [
-        None,
-        "https://img.example/1.jpg",
-        "https://img.example/2.jpg",
-    ]
+    assert all(draft.image_url for draft in found)
+    # With room for more, the page without a photo is still used, last.
+    more = find_web_recipes(ai, reader, "healthy fish dinner", 4, ["Salmon bowl"])
+    assert [draft.title for draft in more][-1] == "Fish soup"
+    assert more[-1].image_url is None
 
 
 def test_no_working_pages_means_no_suggestions():
@@ -386,7 +381,7 @@ def test_one_search_covers_every_rule_and_empty_meal():
     query, count = ai.queries[0]
     assert "at least 2 with fish" in query and "at least 1 with chicken" in query
     # The balanced week asks for 4 meals with vegetables, 2 fish, 1 legumes; plus own rules.
-    assert "at least 4 with vegetables" in query and count == 10
+    assert "at least 4 with vegetables" in query and count == 12
     assert len(plan["meals"]) == 5 and all(meal["is_new"] for meal in plan["meals"].values())
     assert all(status["ok"] for status in plan["rule_status"])
 
