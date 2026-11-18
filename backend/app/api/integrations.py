@@ -49,6 +49,7 @@ def _save_for_review(
     web: object | None = None,
 ) -> Spoken:
     recipe = Recipe(**draft.model_dump(), needs_review=True)
+    recipe = services.prepare_for_household(repo, ai, household_id, recipe)  # type: ignore[arg-type]
     services.fill_nutrition(ai, recipe)  # type: ignore[arg-type]
     if web is not None:
         keep_own_copy(web.images, web.read_image, household_id, recipe)  # type: ignore[attr-defined]

@@ -127,8 +127,10 @@ def all_files(files: list[UploadFile] | None, file: UploadFile | None) -> list[U
 
 
 @router.get("")
-def list_recipes(household: CurrentHousehold, repo: RepoDep) -> list[Recipe]:
-    return sorted(repo.list_recipes(household.id), key=lambda recipe: recipe.title.lower())
+def list_recipes(household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep) -> list[Recipe]:
+    # Recipes not yet in the household's language are translated once, here.
+    recipes = services.localize_library(repo, ai, household.id, repo.list_recipes(household.id))
+    return sorted(recipes, key=lambda recipe: recipe.title.lower())
 
 
 @router.post("", status_code=201)
@@ -139,7 +141,7 @@ def create_recipe(
     web: WebDep,
     ai: OptionalAIDep,
 ) -> Recipe:
-    recipe = Recipe(**draft.model_dump())
+    recipe = services.prepare_for_household(repo, ai, household.id, Recipe(**draft.model_dump()))
     services.fill_nutrition(ai, recipe)
     # A photo from a web page or TikTok is copied, so it keeps working.
     keep_own_copy(web.images, web.read_image, household.id, recipe)
@@ -170,6 +172,7 @@ def update_recipe(
     # Saving an edit counts as reviewing it.
     recipe = existing.model_copy(update={**draft.model_dump(), "needs_review": False})
     recipe = Recipe.model_validate(recipe.model_dump())
+    recipe = services.prepare_for_household(repo, ai, household.id, recipe)
     services.fill_nutrition(ai, recipe, previous=existing)
     # A changed recipe may no longer fit a diet it was checked against.
     if (recipe.title, [i.name for i in recipe.ingredients]) != (
@@ -206,41 +209,50 @@ def delete_recipe(recipe_id: str, household: CurrentHousehold, repo: RepoDep) ->
 async def import_images(
     household: CurrentHousehold,
     ai: AIDep,
+    repo: RepoDep,
     files: list[UploadFile] | None = File(None),
     file: UploadFile | None = File(None),
 ) -> RecipeDraft:
     """One recipe from one or more screenshots, in the order they are sent."""
     images = await read_images(all_files(files, file))
-    return ai_call(lambda: ai.recipe_from_images(images))
+    draft = ai_call(lambda: ai.recipe_from_images(images))
+    return services.draft_for_household(repo, ai, household.id, draft)
 
 
 @router.post("/import/video")
 async def import_video(
     household: CurrentHousehold,
     ai: AIDep,
+    repo: RepoDep,
     file: UploadFile = File(...),
     caption: str = Form("", max_length=5000),
 ) -> RecipeDraft:
     data, mime_type = await read_video(file)
-    return ai_call(lambda: ai.recipe_from_video(data, mime_type, caption))
+    draft = ai_call(lambda: ai.recipe_from_video(data, mime_type, caption))
+    return services.draft_for_household(repo, ai, household.id, draft)
 
 
 @router.post("/import/audio")
 async def import_audio(
-    household: CurrentHousehold, ai: AIDep, file: UploadFile = File(...)
+    household: CurrentHousehold, ai: AIDep, repo: RepoDep, file: UploadFile = File(...)
 ) -> RecipeDraft:
     """A recipe said out loud: recorded in the app, or a voice memo."""
     data, mime_type = await read_audio(file)
-    return ai_call(lambda: ai.recipe_from_audio(data, mime_type))
+    draft = ai_call(lambda: ai.recipe_from_audio(data, mime_type))
+    return services.draft_for_household(repo, ai, household.id, draft)
 
 
 @router.post("/import/link")
 def import_link_route(
-    body: LinkImport, household: CurrentHousehold, ai: AIDep, request: Request
+    body: LinkImport, household: CurrentHousehold, ai: AIDep, request: Request, repo: RepoDep
 ) -> RecipeDraft:
-    return import_link(ai, get_link_reader(request), body.url)
+    draft = import_link(ai, get_link_reader(request), body.url)
+    return services.draft_for_household(repo, ai, household.id, draft)
 
 
 @router.post("/import/text")
-def import_text(body: TextImport, household: CurrentHousehold, ai: AIDep) -> RecipeDraft:
-    return ai_call(lambda: ai.recipe_from_text(body.text))
+def import_text(
+    body: TextImport, household: CurrentHousehold, ai: AIDep, repo: RepoDep
+) -> RecipeDraft:
+    draft = ai_call(lambda: ai.recipe_from_text(body.text))
+    return services.draft_for_household(repo, ai, household.id, draft)

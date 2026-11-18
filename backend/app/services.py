@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
-from app import standards
+from app import i18n, standards
 from app.ai.base import AIError, RecipeAI
 from app.core import balance, planner
 from app.core import pantry as pantry_logic
@@ -32,6 +32,7 @@ from app.models import (
     PlanMeal,
     PlanOut,
     Recipe,
+    RecipeDraft,
     Rule,
     Settings,
     WeekBalance,
@@ -97,6 +98,13 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
         same = saved is not None and [(i.name, i.unit, i.quantity) for i in saved.ingredients] == [
             (i.name, i.unit, i.quantity) for i in meal.recipe.ingredients
         ]
+        if saved is not None and saved.language != meal.recipe.language:
+            # The library has it in the household's language now; the meal shows that.
+            meal.recipe.title, meal.recipe.steps = saved.title, saved.steps
+            meal.recipe.language = saved.language
+            labels = {i.name: i.label for i in saved.ingredients}
+            for ingredient in meal.recipe.ingredients:
+                ingredient.label = labels.get(ingredient.name, "")
         if same and meal.recipe.macros is None and saved.macros is not None:
             meal.recipe.ingredients = saved.ingredients
             meal.recipe.refresh_macros()
@@ -111,7 +119,27 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
             [(slot, meal.recipe) for slot, meal in out.meals.items()], standards.load()
         )
     )
+    _in_language(out, settings)
     return out
+
+
+def _in_language(out: PlanOut, settings: Settings) -> None:
+    """Rule chips and balance checks in the household's language."""
+    lang = settings.language
+    for status, rule in zip(out.rule_status, settings.rules, strict=False):
+        key = "at_least" if rule.kind == "min" else "at_most"
+        status.label = i18n.t(lang, key, count=rule.count, what=i18n.word(lang, rule.tag))
+    if out.rule_status:
+        out.rule_status[-1].label = i18n.t(lang, "repeats", count=out.rule_status[-1].target)
+    if lang == "en" or out.balance is None:
+        return
+    for check in out.balance.checks:
+        if f"check_{check.key}" in i18n._MESSAGES:
+            check.label = i18n.t(lang, f"check_{check.key}")
+        if match := re.fullmatch(r"(\d+) of (\d+) days", check.detail):
+            check.detail = i18n.t(lang, "days_of", value=match[1], days=match[2])
+        elif match := re.fullmatch(r"(\d+) (meals|kinds)", check.detail):
+            check.detail = i18n.t(lang, f"n_{match[2]}", value=match[1])
 
 
 def _fill_with_suggestions(
@@ -253,7 +281,12 @@ def _fill_with_suggestions(
 
 
 def check_diets(
-    repo: Repo, ai: RecipeAI | None, household_id: str, recipes: list[Recipe], diets: list[str]
+    repo: Repo,
+    ai: RecipeAI | None,
+    household_id: str,
+    recipes: list[Recipe],
+    diets: list[str],
+    lang: str = "en",
 ) -> str | None:
     """Make sure each recipe has been judged against each diet. Returns a problem, if any.
 
@@ -275,17 +308,17 @@ def check_diets(
                     repo.save_recipe(household_id, recipe)
     except AIError as error:
         log.warning("Could not check recipes against diets: %s", error)
-        return f"Could not check your recipes against your diets: {error}"
+        return i18n.t(lang, "diet_check_failed", error=error)
     return None
 
 
 def warnings_for(settings: Settings, recipe: Recipe) -> list[str]:
     """Why a recipe should not be planned for this household, in plain words."""
+    lang = settings.language
     found = found_in(recipe, settings.allergies, settings.avoid)
     missing = missing_equipment(recipe, settings.equipment)
-    article = {item: "an" if item[0] in "aeiou" else "a" for item in missing}
-    return [f"contains {food}" for food in found] + [
-        f"needs {article[item]} {item}" for item in missing
+    return [i18n.t(lang, "contains", food=i18n.allergen(lang, food)) for food in found] + [
+        i18n.t(lang, "needs", item=i18n.equipment(lang, item)) for item in missing
     ]
 
 
@@ -337,8 +370,15 @@ def generate_plan(
     notes: list[str] = []
 
     # Only main dishes are planned; desserts, breakfasts and the rest stay in the library.
-    library = [r for r in repo.list_recipes(household_id) if r.category == "main"]
-    problem = check_diets(repo, ai, household_id, library, settings.planning_needs())
+    library = [
+        r
+        for r in localize_library(repo, ai, household_id, repo.list_recipes(household_id))
+        if r.category == "main"
+    ]
+    lang = settings.language
+    problem = check_diets(
+        repo, ai, household_id, library, settings.planning_needs(), settings.language
+    )
     if problem:
         notes.append(problem)
     recipes = [r for r in library if suits(settings, r) and r.id not in kept_ids]
@@ -369,28 +409,22 @@ def generate_plan(
                 [recipe.title for recipe in library],
             )
         except AIError as error:
-            notes.append(f"Could not look for new recipes: {error}")
+            notes.append(i18n.t(lang, "search_failed", error=error))
 
     if ai is not None and len(picks) < len(slots) and time.monotonic() >= deadline:
-        notes.append(
-            f"The web search ran out of time ({web.search_seconds:g} seconds) before finding "
-            "enough recipes, so some meals are empty. Choose them yourself, or generate again."
-        )
+        notes.append(i18n.t(lang, "search_timeout", seconds=web.search_seconds))
     total = len(slots) + len(kept)
     filled = len(picks) + len(kept)
     if filled < total:
         if not library:
-            notes.append(
-                f"Only {filled} of {total} meals could be filled: your recipe library is empty "
-                "and the web search did not find enough. Add a few recipes, or try again."
-            )
+            notes.append(i18n.t(lang, "empty_library", filled=filled, total=total))
         else:
-            notes.append(
-                f"Only {filled} of {total} meals could be filled with recipes that fit your "
-                "diets, allergies and rules. Add more recipes, or choose the empty meals "
-                "yourself."
-            )
+            notes.append(i18n.t(lang, "not_filled", filled=filled, total=total))
 
+    # New ideas from the web are written in English: show them in the household's language.
+    fresh = [i for i, recipe in enumerate(picks) if recipe.id in new_ids]
+    for i, recipe in zip(fresh, in_language(ai, [picks[i] for i in fresh], lang), strict=True):
+        picks[i] = recipe
     meals = dict(kept)
     for slot, recipe in zip(slots, picks, strict=False):
         meals[slot] = PlanMeal(
@@ -424,7 +458,7 @@ def apply_diets(
         raise NotFound("There is no plan for this week yet")
     settings = repo.get_settings(household_id)
     planned = [meal.recipe for meal in plan.meals.values()]
-    check_diets(repo, ai, household_id, planned, settings.planning_needs())
+    check_diets(repo, ai, household_id, planned, settings.planning_needs(), settings.language)
     keep = {
         slot: meal
         for slot, meal in plan.meals.items()
@@ -432,7 +466,7 @@ def apply_diets(
     }
     updated = generate_plan(repo, ai, household_id, week_id, rng, web, keep=keep)
     if plan.status == "approved":
-        updated.notes.append("Approve the plan again to update your grocery list.")
+        updated.notes.append(i18n.t(settings.language, "approve_again"))
         repo.save_plan(household_id, updated)
     return updated
 
@@ -587,6 +621,7 @@ def approve_plan(
         settings.staples,
         pantry,
         load_packs(),
+        settings.language,
     )
     items = [
         GroceryItem(
@@ -600,6 +635,7 @@ def approve_plan(
             needed=line.needed,
             pack=line.pack,
             note=line.note,
+            label=line.label,
         )
         for line in lines
     ]
@@ -699,8 +735,8 @@ def run_weekly_job(
             generate_plan(repo, ai, household.id, target, rng or random.Random(), web)
             invalid = notifier.send(
                 household.device_tokens,
-                "Meal plan ready",
-                "Your meal plan for next week is ready.",
+                i18n.t(settings.language, "plan_ready_title"),
+                i18n.t(settings.language, "plan_ready_body"),
                 f"{app_url}/plan/{target}" if app_url else "",
             )
             repo.remove_device_tokens(household.id, invalid)
@@ -757,9 +793,9 @@ def _meal_date(week_id: str, slot: str) -> date:
     return date.fromisoformat(week_id) + timedelta(days=DAYS.index(slot.split("_")[0]))
 
 
-def _meal_label(week_id: str, slot: str, recipe: Recipe) -> str:
-    day = _meal_date(week_id, slot).strftime("%A")
-    return f"{day}'s {recipe.title.lower()}"
+def _bought_for(lang: str, week_id: str, slot: str, recipe: Recipe) -> str:
+    day = i18n.day_name(lang, _meal_date(week_id, slot).weekday())
+    return i18n.t(lang, "bought_for", day=day, title=recipe.title.lower())
 
 
 def settle_pantry(repo: Repo, household_id: str, today: date | None = None) -> list[PantryItem]:
@@ -816,13 +852,52 @@ def add_to_pantry(
     return list_pantry(repo, household_id)
 
 
-def pantry_from_text(repo: Repo, household_id: str, text: str) -> list[PantryItem]:
-    """ "2 eggs, half a courgette": no AI needed for typed food."""
+def pantry_from_text(
+    repo: Repo, household_id: str, text: str, ai: RecipeAI | None = None
+) -> list[PantryItem]:
+    """Typed food such as "2 eggs, half a courgette" is understood without AI. In
+    Portuguese, the AI only adds the English names underneath."""
+    lang = repo.get_settings(household_id).language
     drafts = [
-        PantryDraft(name=name, quantity=quantity, unit=unit)
+        PantryDraft(name=name, label=name if lang != "en" else "", quantity=quantity, unit=unit)
         for name, quantity, unit in pantry_logic.parse_text(text)
     ]
-    return add_to_pantry(repo, household_id, drafts)
+    return add_to_pantry(repo, household_id, pantry_names(ai, drafts, lang))
+
+
+def pantry_names(ai: RecipeAI | None, drafts: list[PantryDraft], lang: str) -> list[PantryDraft]:
+    """Food shown in Portuguese: its English name, which matching relies on, from its label."""
+    labelled = [d for d in drafts if d.label]
+    if lang == "en" or not labelled or ai is None:
+        return drafts
+    try:
+        names = ai.translate_names([d.label for d in labelled], "en")
+    except (AIError, AttributeError) as error:
+        log.warning("Could not translate food names: %s", error)
+        return drafts
+    out = []
+    english = iter(names)
+    for draft in drafts:
+        if draft.label:
+            name = next(english, draft.name)
+            draft = PantryDraft(**{**draft.model_dump(), "name": name, "aisle": "other"})
+        out.append(draft)
+    return out
+
+
+def pantry_labels(ai: RecipeAI | None, drafts: list[PantryDraft], lang: str) -> list[PantryDraft]:
+    """Food read in English by the AI, labelled in the household's language for checking."""
+    if lang == "en" or not drafts or ai is None:
+        return drafts
+    try:
+        labels = ai.translate_names([d.name for d in drafts], lang)
+    except (AIError, AttributeError) as error:
+        log.warning("Could not translate food names: %s", error)
+        return drafts
+    return [
+        d.model_copy(update={"label": label[:120]})
+        for d, label in zip(drafts, labels, strict=False)
+    ]
 
 
 def update_pantry_item(
@@ -832,7 +907,8 @@ def update_pantry_item(
     item = next((i for i in items if i.id == item_id), None)
     if item is None:
         raise NotFound("That food is no longer in the pantry")
-    item.name, item.quantity, item.unit = draft.name, draft.quantity, draft.unit
+    item.name, item.label = draft.name, draft.label
+    item.quantity, item.unit = draft.quantity, draft.unit
     repo.save_pantry(household_id, items)
     return list_pantry(repo, household_id)
 
@@ -853,6 +929,7 @@ def put_away(repo: Repo, household_id: str) -> int:
     new = [
         PantryItem(
             name=item.name,
+            label=item.label,
             quantity=item.quantity,
             unit=item.unit,
             aisle=item.aisle,
@@ -918,7 +995,8 @@ def skip_meal(
 
     # The food: back into the pantry if it was taken out, or in for the first time if the
     # shopping was never put away. Not bought yet (no list made): nothing to keep.
-    label = f"bought for {_meal_label(week_id, slot, meal.recipe)}"
+    lang = settings.language
+    label = _bought_for(lang, week_id, slot, meal.recipe)
     used = scale_ingredients(meal.recipe, meal.portions)
     pantry = settle_pantry(repo, household_id, today)
     if plan.status == "approved" and (meal.consumed or not plan.put_away):
@@ -928,6 +1006,7 @@ def skip_meal(
         food = [
             PantryItem(
                 name=i.name,
+                label=i.label,
                 quantity=i.quantity,
                 unit=i.unit,
                 aisle=i.aisle,
@@ -954,10 +1033,10 @@ def skip_meal(
             and item.use_by < cook_on
             and any(pantry_logic.same_food(item.name, i.name) for i in used)
         ):
-            warnings.append(
-                f"The {item.name} won't keep until {cook_on.strftime('%A')}. "
-                "Freeze it, or cook this sooner."
-            )
+            food = item.label or item.name
+            food = food[:1].upper() + food[1:] if lang == "pt" else food
+            day = i18n.day_name(lang, cook_on.weekday())
+            warnings.append(i18n.t(lang, "wont_keep", food=food, day=day))
 
     target.meals[place] = PlanMeal(
         recipe=meal.recipe, portions=meal.portions, carried_from=f"{week_id} {slot}"
@@ -968,3 +1047,95 @@ def skip_meal(
     del plan.meals[slot]
     repo.save_plan(household_id, plan)
     return SkipResult(plan=plan, moved_to=f"{target_week} {place}", warnings=warnings)
+
+
+# Language ----------------------------------------------------------------------------------
+
+TRANSLATE_BATCH = 8
+
+
+def in_language(ai: RecipeAI | None, recipes: list[Recipe], lang: str) -> list[Recipe]:
+    """Copies of the recipes with title, steps and ingredient labels in ``lang``.
+
+    Ingredient names stay English underneath. Recipes already in that language, or that
+    cannot be translated (no AI, or it failed), come back unchanged.
+    """
+    out = list(recipes)
+    todo = [i for i, recipe in enumerate(out) if recipe.language != lang]
+    if not todo or ai is None:
+        return out
+    for start in range(0, len(todo), TRANSLATE_BATCH):
+        batch = todo[start : start + TRANSLATE_BATCH]
+        try:
+            results = ai.translate_recipes(
+                [(out[i].title, out[i].steps, [g.name for g in out[i].ingredients]) for i in batch],
+                lang,
+            )
+        except (AIError, AttributeError) as error:
+            log.warning("Could not translate recipes: %s", error)
+            return out
+        for index, result in zip(batch, results, strict=False):
+            if result is None:
+                continue
+            title, steps, labels = result
+            recipe = out[index].model_copy(deep=True)
+            recipe.title, recipe.steps, recipe.language = title[:200] or recipe.title, steps, lang
+            for ingredient, label in zip(recipe.ingredients, labels, strict=False):
+                ingredient.label = label[:120] if lang != "en" else ""
+            out[index] = recipe
+    return out
+
+
+def localize_library(
+    repo: Repo, ai: RecipeAI | None, household_id: str, recipes: list[Recipe]
+) -> list[Recipe]:
+    """Translate saved recipes into the household's language, once, and keep the result."""
+    lang = repo.get_settings(household_id).language
+    translated = in_language(ai, recipes, lang)
+    for before, after in zip(recipes, translated, strict=True):
+        if after is not before:
+            repo.save_recipe(household_id, after)
+    return translated
+
+
+def english_names(ai: RecipeAI | None, recipe: Recipe) -> Recipe:
+    """A recipe written in Portuguese: work out the English name under each ingredient label,
+    which matching (allergies, pantry, packs) relies on."""
+    labelled = [i for i in recipe.ingredients if i.label]
+    if recipe.language == "en" or not labelled or ai is None:
+        return recipe
+    try:
+        names = ai.translate_names([i.label for i in labelled], "en")
+    except (AIError, AttributeError) as error:
+        log.warning("Could not translate ingredient names: %s", error)
+        return recipe
+    recipe = recipe.model_copy(deep=True)
+    for ingredient, name in zip([i for i in recipe.ingredients if i.label], names, strict=False):
+        cleaned = normalize_name(name)
+        if cleaned:
+            ingredient.name = cleaned
+            ingredient.aisle = guess_aisle(cleaned)  # type: ignore[assignment]
+    recipe.refresh_macros()
+    return recipe
+
+
+def prepare_for_household(
+    repo: Repo, ai: RecipeAI | None, household_id: str, recipe: Recipe
+) -> Recipe:
+    """Before saving: a recipe written in the household's Portuguese gets English names under
+    its ingredients; one in another language is translated into the household's."""
+    lang = repo.get_settings(household_id).language
+    if recipe.language == lang:
+        return english_names(ai, recipe) if lang != "en" else recipe
+    return in_language(ai, [recipe], lang)[0]
+
+
+def draft_for_household(
+    repo: Repo, ai: RecipeAI | None, household_id: str, draft: RecipeDraft
+) -> RecipeDraft:
+    """An imported recipe, shown for checking in the household's language."""
+    lang = repo.get_settings(household_id).language
+    if draft.language == lang:
+        return draft
+    translated = in_language(ai, [Recipe(**draft.model_dump())], lang)[0]
+    return RecipeDraft.model_validate(translated.model_dump(include=set(RecipeDraft.model_fields)))

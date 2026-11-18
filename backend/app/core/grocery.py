@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from app import i18n
 from app.core import pantry as pantry_logic
 from app.models import Ingredient, PantryItem, Recipe
 
@@ -30,9 +31,8 @@ def pack_for(name: str, unit: str, packs: dict[str, dict]) -> dict | None:
     return best[1] if best else None
 
 
-def pack_label(count: int, pack: dict) -> str:
-    label = pack["label"]
-    name = label if " of " in label or count == 1 else label + "s"
+def pack_label(count: int, pack: dict, lang: str = "en") -> str:
+    name = i18n.pack(lang, pack["label"], count)
     amount = count * pack["size"]
     unit = pack["unit"]
     if not unit:
@@ -56,6 +56,7 @@ class GroceryLine:
     needed: float | None = None  # what the recipes need, when whole packs are bought
     pack: str = ""
     note: str = ""
+    label: str = ""  # the name in the household's language, when it is not English
 
 
 def scale_ingredients(recipe: Recipe, portions: int) -> list[Ingredient]:
@@ -96,6 +97,7 @@ def build_grocery_lines(
     staples: list[str] | None = None,
     pantry: list[PantryItem] | None = None,
     packs: dict[str, dict] | None = None,
+    lang: str = "en",
 ) -> list[GroceryLine]:
     """Merge the scaled ingredients of every planned meal into one list.
 
@@ -121,21 +123,24 @@ def build_grocery_lines(
                 line.quantity = (line.quantity or 0) + quantity
             if line.aisle == "other":
                 line.aisle = ingredient.aisle
+            if ingredient.label and not line.label:
+                line.label = ingredient.label
             if recipe.title not in line.recipes:
                 line.recipes.append(recipe.title)
 
     lines = []
     for line in merged.values():
+        unsure = False
         if pantry:
             found, have = pantry_logic.available(pantry, line.name, line.unit)
             if found and (have is None or line.quantity is None):
-                line.note = "you have some at home"
+                line.note = i18n.t(lang, "have_some")
+                unsure = True
             elif found and have:
                 if have >= (line.quantity or 0) - 1e-9:
                     continue  # all of it is at home already
                 line.quantity = (line.quantity or 0) - have
-                line.note = "the rest is at home"
-        unsure = line.note == "you have some at home"
+                line.note = i18n.t(lang, "rest_at_home")
         pack = (
             pack_for(line.name, line.unit, packs)
             if packs and line.quantity and not unsure
@@ -144,7 +149,7 @@ def build_grocery_lines(
         if pack is not None and line.quantity is not None:
             count = pantry_logic.packs_needed(line.quantity, pack["size"])
             needed = _round_up(line.quantity, line.unit)
-            line.pack = pack_label(count, pack)
+            line.pack = pack_label(count, pack, lang)
             bought, unit = _display(float(count * pack["size"]), line.unit)
             # The needed amount in the same unit as the amount bought ("0.15 kg", not "150 kg").
             scale = bought / (count * pack["size"])

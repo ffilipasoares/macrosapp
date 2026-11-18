@@ -47,3 +47,14 @@ class RecipeAI(Protocol):
     def pantry_from_audio(self, data: bytes, mime_type: str) -> list[PantryDraft]:
         """The food someone says they have at home."""
         ...
+
+    def translate_recipes(
+        self, recipes: list[tuple[str, list[str], list[str]]], target: str
+    ) -> list[tuple[str, list[str], list[str]] | None]:
+        """Each (title, steps, ingredient names) in ``target`` ("en" or "pt"), in order.
+        None for a recipe that could not be translated."""
+        ...
+
+    def translate_names(self, names: list[str], target: str) -> list[str]:
+        """Food names in ``target``, in order: "cebola roxa" → "red onion" for "en"."""
+        ...

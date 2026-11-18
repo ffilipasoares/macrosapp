@@ -16,6 +16,7 @@ class Me(BaseModel):
     shortcut_token: str
     push_devices: int
     setup_done: bool
+    language: str
 
 
 class ItemText(BaseModel):
@@ -31,13 +32,14 @@ class DeviceToken(BaseModel):
 
 
 @router.get("/me")
-def me(household: CurrentHousehold) -> Me:
+def me(household: CurrentHousehold, repo: RepoDep) -> Me:
     return Me(
         household_id=household.id,
         email=household.owner_email,
         shortcut_token=household.shortcut_token,
         push_devices=len(household.device_tokens),
         setup_done=household.setup_done,
+        language=repo.get_settings(household.id).language,
     )
 
 

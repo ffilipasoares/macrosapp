@@ -113,6 +113,29 @@ class FakeRecipeAI:
         self.calls.append(("pantry audio", mime_type))
         return [PantryDraft(name="courgette", quantity=0.5), PantryDraft(name="rice")]
 
+    # Translations are marked rather than real: "[pt] onion" in Portuguese, back to "onion".
+    def translate_recipes(
+        self, recipes: list[tuple[str, list[str], list[str]]], target: str
+    ) -> list[tuple[str, list[str], list[str]] | None]:
+        self.calls.append(("translate", (len(recipes), target)))
+        return [
+            (
+                _mark(title, target),
+                [_mark(s, target) for s in steps],
+                [_mark(n, target) for n in names],
+            )
+            for title, steps, names in recipes
+        ]
+
+    def translate_names(self, names: list[str], target: str) -> list[str]:
+        self.calls.append(("names", (len(names), target)))
+        return [_mark(name, target) for name in names]
+
+
+def _mark(text: str, target: str) -> str:
+    plain = text.removeprefix("[pt] ")
+    return f"[pt] {plain}" if target == "pt" else plain
+
 
 class SampleRecipeAI(FakeRecipeAI):
     """The fake for running the app locally: it also writes sample dinners, so an empty

@@ -67,8 +67,14 @@ class Macros(BaseModel):
     missing: list[str] = Field(default_factory=list)
 
 
+Language = Literal["en", "pt"]
+
+
 class Ingredient(BaseModel):
+    # Always English: allergies, the pantry, packs and diets match on it.
     name: str = Field(min_length=1, max_length=120)
+    # How it is shown when the household reads Portuguese ("" = show the name).
+    label: str = Field(default="", max_length=120)
     quantity: float | None = Field(default=None, ge=0)
     unit: str = Field(default="", max_length=20)
     aisle: Aisle = "other"
@@ -116,6 +122,8 @@ class RecipeDraft(BaseModel):
     # A photo: uploaded to Firebase Storage by the app, or taken from the recipe's web page.
     image_url: str | None = Field(default=None, max_length=2000)
     original_language: str = "en"
+    # The language the title, steps and ingredient labels are written in.
+    language: Language = "en"
     # Worked out from the ingredients every time a recipe is built; never set by hand.
     macros: Macros | None = None
 
@@ -203,6 +211,8 @@ class Settings(BaseModel):
     repeat_window_weeks: int = Field(default=2, ge=0, le=8)
     max_repeat_ratio: float = Field(default=0.2, ge=0, le=1)
     timezone: str = "Europe/Lisbon"
+    # Everyone in the household reads the app, recipes and lists in this language.
+    language: Language = "en"
     reference_portion: ReferencePortion = Field(default_factory=ReferencePortion)
     # Free text, several allowed, e.g. ["mediterranean", "high-protein"].
     # Vegetarian, vegan and pescatarian also rule out foods.
@@ -340,13 +350,15 @@ class GroceryItem(BaseModel):
     # What the recipes need, when the amount to buy is rounded up to whole packs.
     needed: float | None = None
     pack: str = ""  # e.g. "1 bag (300 g)"
+    label: str = ""  # the name in the household's language, when it is not English
     note: str = ""  # e.g. "you have some at home"
 
 
 class PantryDraft(BaseModel):
     """Food read from a photo, a recording or text, before it is saved."""
 
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=120)  # English, for matching
+    label: str = Field(default="", max_length=120)  # shown in Portuguese households
     quantity: float | None = Field(default=None, ge=0)
     unit: str = Field(default="", max_length=20)
     aisle: Aisle = "other"
