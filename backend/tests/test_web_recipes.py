@@ -449,3 +449,30 @@ def test_search_budget_and_allowed_sites_come_from_the_environment(monkeypatch):
     assert config.web_search_seconds == 120 and config.cors_origins == ["https://meals.web.app"]
     monkeypatch.setenv("CORS_ORIGINS", "https://meals.web.app, https://meals.firebaseapp.com")
     assert Config().cors_origins == ["https://meals.web.app", "https://meals.firebaseapp.com"]
+
+
+def test_only_real_recipe_websites_are_used():
+    from app.web_recipes import is_recipe_website
+
+    recipe_site = LinkContent(
+        "https://www.bbcgoodfood.com/recipes/fish-pie", "x", "recipe-data", None
+    )
+    assert is_recipe_website(recipe_site)
+    for url in (
+        "https://github.com/someone/recipes/blob/main/fish-pie.md",
+        "https://raw.githubusercontent.com/someone/recipes/main/fish.md",
+        "https://www.reddit.com/r/Cooking/comments/1/fish_pie/",
+        "https://en.wikipedia.org/wiki/Fish_pie",
+    ):
+        assert not is_recipe_website(LinkContent(url, "x", "recipe-data", None)), url
+    # A page without recipe data is not a recipe website's recipe page.
+    assert not is_recipe_website(LinkContent("https://blog.example/fish", "x", "page", None))
+
+
+def test_a_recipe_on_github_is_never_suggested():
+    github = "https://github.com/someone/recipes/blob/main/fish-pie.md"
+    pages = {**PAGES, github: LinkContent(github, "Fish pie\n- 1 cod", "recipe-data", None)}
+    ai = ListedLinks([github, *PAGES])
+    found = find_web_recipes(ai, lambda url: pages[url], "fish", 3, [])
+    assert github not in {draft.source_url for draft in found}
+    assert len(found) == 3

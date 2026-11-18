@@ -1,7 +1,9 @@
 """Find new recipes on the web, keeping only ones whose page really works.
 
 The web search only proposes addresses. Each page is then opened and kept only if
-it loads and the AI finds a recipe with ingredients on it. The recipe is built
+it is a real recipe website's page: not a code site, forum, video or social network,
+and it publishes proper recipe data (the schema.org Recipe markup recipe sites use),
+which the AI then reads into a recipe with ingredients. The recipe is built
 from that page, so its link is the page that was really read. The page's photo is
 used when it has one.
 """
@@ -10,6 +12,7 @@ import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, wait
+from urllib.parse import urlsplit
 
 from app.ai.base import AIError, RecipeAI
 from app.links import LinkContent, LinkError
@@ -25,6 +28,24 @@ MAX_WORKERS = 6
 MAX_PAGE_CHARS = 8000
 # Downloads stop this long before the deadline, so the pages that did load can still be read.
 READ_RESERVE_SECONDS = 15.0
+
+
+# Never recipe websites, even when a page there happens to contain a recipe.
+NOT_RECIPE_SITES = (
+    "github.com", "githubusercontent.com", "gitlab.com", "bitbucket.org", "gist.github.com",
+    "stackoverflow.com", "stackexchange.com", "reddit.com", "quora.com", "wikipedia.org",
+    "wikihow.com", "youtube.com", "youtu.be", "tiktok.com", "instagram.com", "facebook.com",
+    "pinterest.com", "pinterest.pt", "x.com", "twitter.com", "medium.com", "substack.com",
+    "docs.google.com", "drive.google.com", "amazon.com", "amazon.es", "archive.org",
+    "scribd.com", "slideshare.net", "pdfcoffee.com", "chatgpt.com", "openai.com",
+)  # fmt: skip
+
+
+def is_recipe_website(content: LinkContent) -> bool:
+    """A page from a real recipe website: publishes recipe data and is not a blocked site."""
+    host = (urlsplit(content.url).hostname or "").lower()
+    blocked = any(host == site or host.endswith("." + site) for site in NOT_RECIPE_SITES)
+    return content.kind == "recipe-data" and not blocked
 
 
 def _fetch_page(
@@ -89,6 +110,10 @@ def find_web_recipes(
     contents = [
         content for future in futures if future in done and (content := future.result()) is not None
     ]
+    skipped = [c.url for c in contents if not is_recipe_website(c)]
+    if skipped:
+        log.info("Skipped pages that are not recipe websites: %s", skipped)
+    contents = [content for content in contents if is_recipe_website(content)]
     if not contents or (deadline is not None and time.monotonic() >= deadline):
         return []
 

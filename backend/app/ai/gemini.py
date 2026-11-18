@@ -552,7 +552,8 @@ class GeminiRecipeAI:
                 "Each must be a page for one single recipe from a well-known recipe website "
                 "(such as BBC Good Food, RecipeTin Eats, Simply Recipes, Allrecipes, "
                 "Serious Eats), "
-                f"not a collection. Avoid recipes similar to: {avoid}. "
+                "not a collection. Never GitHub or other code sites, forums, Wikipedia, "
+                f"video sites, social media or shops. Avoid recipes similar to: {avoid}. "
                 "Reply only with a short bullet list of the recipe titles."
             ],
             types.GenerateContentConfig(

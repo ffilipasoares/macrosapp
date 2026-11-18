@@ -213,8 +213,9 @@ export function RecipeEditPage() {
     try {
       const url = await uploadRecipePhoto(me.household_id, file);
       setDraft((current) => (current ? { ...current, image_url: url } : current));
-    } catch {
-      setError(t("The photo could not be uploaded. Check your connection and try again."));
+    } catch (e) {
+      console.error("Photo upload failed", e);
+      setError(photoError(e));
     } finally {
       setPhotoBusy(false);
     }
@@ -474,4 +475,21 @@ export function RecipeEditPage() {
       </form>
     </main>
   );
+}
+
+/** Why a photo upload failed, in words that point at the fix. */
+function photoError(error: unknown): string {
+  const code = (error as { code?: string } | null)?.code ?? "";
+  if (code === "storage/unauthorized" || code === "storage/unauthenticated") {
+    return t("Photos are not allowed yet: the storage rules may not be deployed (firebase deploy --only storage). Code: {code}", { code });
+  }
+  if (code === "storage/bucket-not-found" || code === "storage/no-default-bucket" || code === "storage/invalid-default-bucket") {
+    return t("Photo storage is not set up: check VITE_FIREBASE_STORAGE_BUCKET and that Storage is enabled in Firebase. Code: {code}", { code });
+  }
+  if (code === "storage/quota-exceeded") return t("Photo storage is full. Code: {code}", { code });
+  if (code === "storage/retry-limit-exceeded" || code === "storage/canceled") {
+    return t("The photo could not be uploaded. Check your connection and try again.");
+  }
+  const detail = code || (error instanceof Error ? error.message : "");
+  return t("The photo could not be uploaded ({detail}). Try another photo, or send me this message.", { detail: detail || "unknown" });
 }
