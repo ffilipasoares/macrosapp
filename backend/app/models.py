@@ -176,6 +176,16 @@ class SlotSetting(BaseModel):
     portions: int = Field(default=2, ge=1, le=30)
 
 
+class DietMeaning(BaseModel):
+    """A diet word the app did not know, interpreted once by AI."""
+
+    kind: Literal["diet", "cuisine"] = "diet"
+    describe: str = Field(default="", max_length=400)
+    max_carbs_g: float | None = Field(default=None, ge=0, le=500)
+    min_protein_g: float | None = Field(default=None, ge=0, le=500)
+    language: str | None = Field(default=None, max_length=8)
+
+
 class Rule(BaseModel):
     """ "At least 2 chicken meals" is kind="min", count=2, tag="chicken"."""
 
@@ -212,6 +222,8 @@ class Settings(BaseModel):
     rules: list[Rule] = Field(default_factory=list)
     staples: list[str] = Field(default_factory=list)
     timezone: str = "Europe/Lisbon"
+    # What the household's own diet words mean, worked out once by AI ("low FODMAP").
+    diet_meanings: dict[str, "DietMeaning"] = Field(default_factory=dict)
     # Everyone in the household reads the app, recipes and lists in this language.
     language: Language = "en"
     reference_portion: ReferencePortion = Field(default_factory=ReferencePortion)

@@ -208,7 +208,7 @@ export function SettingsPage() {
 
           <Section
             title={t("Diets")}
-            note={t("Choose as many as you like. Plans and new recipe ideas follow all of them. Vegetarian, vegan and pescatarian also rule foods out.")}
+            note={t("Choose as many as you like; plans follow what each one means, not just the word. You can add a cuisine too, like Portuguese: new ideas then come from that country's recipe websites. Vegetarian, vegan and pescatarian also rule foods out.")}
           >
             <div className="flex flex-wrap gap-2" role="group" aria-label={t("Diets")}>
               {[...DIETS, ...customDiets.map((value) => ({ value, label: value }))].map((choice) => {

@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from app.models import Ingredient, IngredientNutrition, PantryDraft, RecipeDraft
+from app.models import DietMeaning, Ingredient, IngredientNutrition, PantryDraft, RecipeDraft
 
 
 class AIError(Exception):
@@ -53,6 +53,10 @@ class RecipeAI(Protocol):
     ) -> list[tuple[str, list[str], list[str]] | None]:
         """Each (title, steps, ingredient names) in ``target`` ("en" or "pt"), in order.
         None for a recipe that could not be translated."""
+        ...
+
+    def interpret_diets(self, words: list[str]) -> dict[str, DietMeaning]:
+        """What each diet or cuisine word means: what fits, limits, a cuisine's language."""
         ...
 
     def translate_names(self, names: list[str], target: str) -> list[str]:

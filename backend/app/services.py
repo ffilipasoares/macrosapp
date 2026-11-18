@@ -18,7 +18,15 @@ from app.core import balance, planner
 from app.core import pantry as pantry_logic
 from app.core import taste as taste_logic
 from app.core.allergens import found_in, missing_equipment
-from app.core.diet import fits, needs_verdict, search_phrase
+from app.core.diet import (
+    criteria,
+    cuisine_hint,
+    fits,
+    is_known,
+    meaning,
+    needs_verdict,
+    search_phrase,
+)
 from app.core.grocery import build_grocery_lines, load_packs, scale_ingredients
 from app.core.ingredients import guess_aisle, normalize_name
 from app.core.weeks import DAYS, SLOT_KEYS, next_week_id, previous_week_ids
@@ -185,7 +193,7 @@ def _fill_with_suggestions(
     total = max(gaps, sum(needs.values()))
     if total == 0:
         return picks, new_ids
-    query = search_phrase(settings.planning_needs(), needs, wishes)
+    query = search_phrase(settings.planning_needs(), needs, wishes, settings.diet_meanings)
     # Ask for a couple more than needed, since some pages will not work.
     # Ask for a few more than needed: some pages will not work, and those with a photo
     # are preferred.
@@ -263,7 +271,15 @@ def _fill_with_suggestions(
                 remaining_gaps,
                 forbidden,
                 used_titles,
-                "; ".join([" and ".join(settings.planning_needs()), *(wishes or [])]).strip("; "),
+                "; ".join(
+                    part
+                    for part in (
+                        criteria(settings.planning_needs(), settings.diet_meanings),
+                        cuisine_hint(settings.planning_needs(), settings.diet_meanings),
+                        *(wishes or []),
+                    )
+                    if part
+                ),
             )
             # Written for these diets, so they count as fitting them.
             extra_found = [
@@ -304,24 +320,31 @@ def check_diets(
     recipes: list[Recipe],
     diets: list[str],
     lang: str = "en",
+    learned: dict | None = None,
 ) -> str | None:
     """Make sure each recipe has been judged against each diet. Returns a problem, if any.
 
-    Verdicts are stored on the recipe, so each recipe is only judged once per diet.
-    Recipes that could not be judged are treated as fitting.
+    The AI judges against what each diet means ("low in carbohydrates: no pasta, rice…"),
+    not the bare word. Verdicts are stored on the recipe under the word, so each recipe is
+    only judged once per diet. Recipes that could not be judged are treated as fitting.
     """
-    pending = [recipe for recipe in recipes if needs_verdict(diets, recipe)]
+    pending = [recipe for recipe in recipes if needs_verdict(diets, recipe, learned)]
     if not pending or ai is None:
         return None
+    words = [w for w in needs_verdict(diets, Recipe(title="-"), learned)]
+    described = {
+        (w if w.startswith("free of ") else meaning(w, learned).describe): w for w in words
+    }
     try:
         for start in range(0, len(pending), DIET_CHECK_BATCH):
             batch = pending[start : start + DIET_CHECK_BATCH]
             verdicts = ai.check_diets(
-                [(r.title, [i.name for i in r.ingredients]) for r in batch], diets
+                [(r.title, [i.name for i in r.ingredients]) for r in batch], list(described)
             )
             for recipe, verdict in zip(batch, verdicts, strict=False):
                 if verdict:
-                    recipe.diet_fit = {**recipe.diet_fit, **verdict}
+                    by_word = {described.get(k, k): v for k, v in verdict.items()}
+                    recipe.diet_fit = {**recipe.diet_fit, **by_word}
                     repo.save_recipe(household_id, recipe)
     except AIError as error:
         log.warning("Could not check recipes against diets: %s", error)
@@ -342,7 +365,9 @@ def warnings_for(settings: Settings, recipe: Recipe) -> list[str]:
 def suits(settings: Settings, recipe: Recipe) -> bool:
     """Whether the planner may pick a recipe: fits the diets, no allergy, no avoided
     food, and nothing needed that the kitchen lacks. Choosing by hand is still free."""
-    return fits(settings.planning_needs(), recipe) and not warnings_for(settings, recipe)
+    return fits(settings.planning_needs(), recipe, settings.diet_meanings) and not warnings_for(
+        settings, recipe
+    )
 
 
 def all_rules(settings: Settings, slot_count: int) -> list[Rule]:
@@ -394,7 +419,13 @@ def generate_plan(
     ]
     lang = settings.language
     problem = check_diets(
-        repo, ai, household_id, library, settings.planning_needs(), settings.language
+        repo,
+        ai,
+        household_id,
+        library,
+        settings.planning_needs(),
+        settings.language,
+        settings.diet_meanings,
     )
     if problem:
         notes.append(problem)
@@ -486,7 +517,15 @@ def apply_diets(
         raise NotFound("There is no plan for this week yet")
     settings = repo.get_settings(household_id)
     planned = [meal.recipe for meal in plan.meals.values()]
-    check_diets(repo, ai, household_id, planned, settings.planning_needs(), settings.language)
+    check_diets(
+        repo,
+        ai,
+        household_id,
+        planned,
+        settings.planning_needs(),
+        settings.language,
+        settings.diet_meanings,
+    )
     keep = {
         slot: meal
         for slot, meal in plan.meals.items()
@@ -560,7 +599,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
         recent_weeks(repo, household_id, week_id),
     )
     for option in options:
-        option.fits_diets = fits(settings.diets, option.recipe)
+        option.fits_diets = fits(settings.diets, option.recipe, settings.diet_meanings)
         option.not_for_us = option.recipe.not_for_us
         option.warnings = warnings_for(settings, option.recipe)
     # Best suggestions first; everything else follows, flagged but still selectable:
@@ -1380,3 +1419,18 @@ def _explain(repo: Repo, household_id: str, out: PlanOut, settings: Settings) ->
         if meal.is_new or recipe.last_planned_week is None:
             reasons.append(i18n.t(lang, "reason_new"))
         meal.reasons = reasons
+
+
+def interpret_diets(ai: RecipeAI | None, settings: Settings) -> Settings:
+    """Words the app does not know yet ("low FODMAP", "nordic") get a meaning once, by AI:
+    a diet with what fits and any limits, or a cuisine with its language."""
+    unknown = [w for w in settings.diets if not is_known(w) and w not in settings.diet_meanings]
+    known_now = {w: m for w, m in settings.diet_meanings.items() if w in settings.diets}
+    if not unknown or ai is None:
+        return settings.model_copy(update={"diet_meanings": known_now})
+    try:
+        meanings = ai.interpret_diets(unknown)
+    except (AIError, AttributeError) as error:
+        log.warning("Could not interpret diets %s: %s", unknown, error)
+        return settings.model_copy(update={"diet_meanings": known_now})
+    return settings.model_copy(update={"diet_meanings": {**known_now, **meanings}})

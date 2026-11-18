@@ -101,11 +101,14 @@ def test_several_diets_combine():
 def test_search_asks_for_healthy_varied_dinners_in_every_chosen_diet():
     plain = search_phrase([], {})
     assert (
-        plain.startswith("healthy home-cooked dinner recipes")
+        plain.startswith("Everyday healthy home-cooked dinner recipes")
         and "chicken, fish, seafood, beef" in plain
     )
     both = search_phrase(["mediterranean", "high-protein"], {"fish": 2})
-    assert "that are mediterranean and high-protein" in both and "at least 2 with fish" in both
+    # The meaning of each diet, never the bare label that would end up in titles.
+    assert "plenty of vegetables, legumes, fish, olive oil" in both
+    assert "high in protein" in both and "at least 2 with fish" in both
+    assert "never choose a recipe because its title contains a diet or cuisine word" in both
     assert "beef" not in search_phrase(["vegetarian"], {})
 
 
@@ -138,7 +141,7 @@ def test_web_ideas_follow_the_diet_and_vary_the_protein():
     client = make(ai, pages)
     set_settings(client, diets=["mediterranean"])
     plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
-    assert "mediterranean" in ai.queries[0]
+    assert "Mediterranean way of eating" in ai.queries[0]
     proteins = sorted(meal["recipe"]["protein"] for meal in plan["meals"].values())
     # Five meals from mostly-chicken results: no protein more than twice.
     assert len(proteins) == 5 and max(proteins.count(p) for p in set(proteins)) <= 2
@@ -303,7 +306,9 @@ def test_fallback_recipes_fill_what_the_web_could_not_and_follow_the_diets():
     assert ai.asked == (
         {"vegetables": 4, "fish": 2, "legumes": 1},
         5,
-        "mediterranean and high-protein",
+        "Mediterranean way of eating: plenty of vegetables, legumes, fish, olive oil and whole "
+        "grains; little red meat and processed food; high in protein: a generous portion of "
+        "meat, fish, eggs, dairy or legumes",
     )
     assert len(plan["meals"]) == 5 and all(meal["is_new"] for meal in plan["meals"].values())
     assert all(
@@ -393,3 +398,58 @@ def test_any_recipe_can_be_chosen_by_hand_even_one_already_in_the_week():
     ).json()
     assert chosen["meals"]["mon_dinner"]["recipe"]["title"] == "Steak"
     assert chosen["meals"]["tue_dinner"]["recipe"]["title"] == "Bean stew"
+
+
+def test_a_cuisine_guides_where_to_look_but_never_rules_a_recipe_out():
+    from app.core.diet import cuisine_words, diet_words, fits
+
+    words = ["portuguese", "low carb"]
+    assert cuisine_words(words) == ["portuguese"] and diet_words(words) == ["low carb"]
+    phrase = search_phrase(words, {})
+    assert "Portuguese home cooking" in phrase and "Pingo Doce" in phrase
+    assert "searched in the cuisine's own language (pt)" in phrase
+    assert "no pasta, rice, bread or potatoes as the base" in phrase
+    # An Italian dish is still fine for a household that likes Portuguese food.
+    assert fits(["portuguese"], recipe("chicken"))
+
+
+def test_carb_and_protein_limits_are_checked_on_the_macros():
+    from app.core.diet import fits
+    from app.models import Ingredient, IngredientNutrition, Recipe
+
+    def dish(carbs_per_100g, protein_per_100g):
+        nutrition = IngredientNutrition(
+            grams_per_unit=None,
+            kcal_per_100g=200,
+            protein_per_100g=protein_per_100g,
+            carbs_per_100g=carbs_per_100g,
+            fat_per_100g=5,
+        )
+        return Recipe(
+            title="Dish",
+            servings=2,
+            ingredients=[Ingredient(name="food", quantity=400, unit="g", nutrition=nutrition)],
+        )
+
+    pasta = dish(carbs_per_100g=30, protein_per_100g=10)  # 60 g carbs, 20 g protein a portion
+    steak = dish(carbs_per_100g=2, protein_per_100g=20)  # 4 g carbs, 40 g protein a portion
+    assert not fits(["low carb"], pasta) and fits(["low-carb"], steak)
+    assert not fits(["high-protein"], pasta) and fits(["high-protein"], steak)
+
+
+def test_own_diet_words_get_a_meaning_once_and_searches_use_it():
+    ai = Web({})
+    client = make(ai)
+    saved = set_settings(client, diets=["low fodmap", "vietnamese", "mediterranean"])
+    meanings = saved["diet_meanings"]
+    # Known words need no AI; the others are interpreted once.
+    assert set(meanings) == {"low fodmap", "vietnamese"}
+    assert meanings["vietnamese"]["kind"] == "cuisine"
+    assert ai.calls.count(("interpret", ("low fodmap", "vietnamese"))) == 1
+    set_settings(client, diets=["low fodmap", "vietnamese", "mediterranean"])
+    assert sum(1 for name, _ in ai.calls if name == "interpret") == 1
+    client.post(f"/api/plans/{WEEK}/generate", headers=AUTH)
+    query = ai.queries[0]
+    assert "dishes that suit a low fodmap diet" in query and "vietnamese home cooking" in query
+    # Dropping a word drops its meaning.
+    assert set(set_settings(client, diets=["vietnamese"])["diet_meanings"]) == {"vietnamese"}

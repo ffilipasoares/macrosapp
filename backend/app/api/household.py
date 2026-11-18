@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app import services
-from app.deps import CurrentHousehold, RepoDep
+from app.deps import CurrentHousehold, OptionalAIDep, RepoDep
 from app.models import GroceryItem, Settings
 
 router = APIRouter(tags=["household"])
@@ -55,7 +55,11 @@ def get_settings(household: CurrentHousehold, repo: RepoDep) -> Settings:
 
 
 @router.put("/settings")
-def save_settings(settings: Settings, household: CurrentHousehold, repo: RepoDep) -> Settings:
+def save_settings(
+    settings: Settings, household: CurrentHousehold, repo: RepoDep, ai: OptionalAIDep
+) -> Settings:
+    # Diet words the app does not know get a meaning once, so plans understand them.
+    settings = services.interpret_diets(ai, settings)
     repo.save_settings(household.id, settings)
     return settings
 

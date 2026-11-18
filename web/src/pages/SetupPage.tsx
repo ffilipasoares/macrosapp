@@ -146,7 +146,7 @@ export function SetupPage() {
     },
     {
       title: t("Do you follow a diet?"),
-      note: t("Choose any, or none. Every plan already aims for a balanced week."),
+      note: t("Choose any, or none, and add your own: a diet, or a cuisine like Portuguese. Every plan already aims for a balanced week."),
       body: <DietFields settings={settings} change={change} />,
     },
     {

@@ -3,7 +3,7 @@
 import re
 
 from app.ai.base import AIError
-from app.models import Ingredient, IngredientNutrition, PantryDraft, RecipeDraft
+from app.models import DietMeaning, Ingredient, IngredientNutrition, PantryDraft, RecipeDraft
 
 _SAMPLE = RecipeDraft(
     title="Lemon herb chicken traybake",
@@ -126,6 +126,15 @@ class FakeRecipeAI:
             )
             for title, steps, names in recipes
         ]
+
+    def interpret_diets(self, words: list[str]) -> dict[str, DietMeaning]:
+        self.calls.append(("interpret", tuple(words)))
+        return {
+            w: DietMeaning(kind="cuisine", describe=f"{w} home cooking", language="xx")
+            if w.endswith("ian") or w.endswith("ese")
+            else DietMeaning(kind="diet", describe=f"dishes that suit a {w} diet")
+            for w in words
+        }
 
     def translate_names(self, names: list[str], target: str) -> list[str]:
         self.calls.append(("names", (len(names), target)))

@@ -903,6 +903,16 @@ export interface components {
             avoid?: string[];
             /** Equipment */
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[] | null;
+            /** Diet Meanings: the household's own diet words, interpreted once */
+            diet_meanings?: {
+                [key: string]: {
+                    kind?: "diet" | "cuisine";
+                    describe?: string;
+                    max_carbs_g?: number | null;
+                    min_protein_g?: number | null;
+                    language?: string | null;
+                };
+            };
             /** Language: everyone in the household reads the app in it */
             language?: "en" | "pt";
             /** Cook Minutes Weekday: longest a recipe may take; null for no limit */
