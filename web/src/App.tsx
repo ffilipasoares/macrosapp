@@ -12,6 +12,7 @@ import { RecipesPage } from "./pages/RecipesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { useSession } from "./session";
+import { t } from "./lib/i18n";
 
 export function App() {
   const { session } = useSession();
@@ -21,9 +22,9 @@ export function App() {
   if (session.state === "blocked") {
     return (
       <Centered>
-        <h1 className="text-3xl font-bold tracking-tight">Meal Planner</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("Meal Planner")}</h1>
         <ErrorNote message={session.message} />
-        <button className={quietButton} onClick={() => auth.signOut()}>Use a different account</button>
+        <button className={quietButton} onClick={() => auth.signOut()}>{t("Use a different account")}</button>
       </Centered>
     );
   }
@@ -80,11 +81,11 @@ function SignIn() {
   return (
     <Centered>
       <Dots />
-      <h1 className="text-3xl font-bold tracking-tight">Meal Planner</h1>
-      <p className="max-w-xs text-ink-soft">Plan the week, get the grocery list.</p>
+      <h1 className="text-3xl font-bold tracking-tight">{t("Meal Planner")}</h1>
+      <p className="max-w-xs text-ink-soft">{t("Plan the week, get the grocery list.")}</p>
       <ErrorNote message={error} />
-      <button className={primaryButton} onClick={run(signInWithGoogle)}>Sign in with Google</button>
-      {usingEmulators && <button className={quietButton} onClick={run(signInForDevelopment)}>Development sign-in</button>}
+      <button className={primaryButton} onClick={run(signInWithGoogle)}>{t("Sign in with Google")}</button>
+      {usingEmulators && <button className={quietButton} onClick={run(signInForDevelopment)}>{t("Development sign-in")}</button>}
     </Centered>
   );
 }

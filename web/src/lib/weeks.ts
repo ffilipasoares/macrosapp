@@ -1,17 +1,19 @@
+import { locale, t } from "./i18n";
+
 // A week is identified by the date of its Monday (YYYY-MM-DD), the same as in the backend.
 
 export const DAYS = [
-  { key: "mon", name: "Monday" },
-  { key: "tue", name: "Tuesday" },
-  { key: "wed", name: "Wednesday" },
-  { key: "thu", name: "Thursday" },
-  { key: "fri", name: "Friday" },
-  { key: "sat", name: "Saturday" },
-  { key: "sun", name: "Sunday" },
+  { key: "mon", get name() { return t("Monday"); } },
+  { key: "tue", get name() { return t("Tuesday"); } },
+  { key: "wed", get name() { return t("Wednesday"); } },
+  { key: "thu", get name() { return t("Thursday"); } },
+  { key: "fri", get name() { return t("Friday"); } },
+  { key: "sat", get name() { return t("Saturday"); } },
+  { key: "sun", get name() { return t("Sunday"); } },
 ];
 export const MEALS = [
-  { key: "lunch", name: "Lunch" },
-  { key: "dinner", name: "Dinner" },
+  { key: "lunch", get name() { return t("Lunch"); } },
+  { key: "dinner", get name() { return t("Dinner"); } },
 ];
 
 function toId(date: Date): string {
@@ -50,24 +52,24 @@ export function defaultWeekId(today = new Date()): string {
 
 export function weekLabel(weekId: string, today = new Date()): string {
   const current = weekIdOf(today);
-  if (weekId === current) return "This week";
-  if (weekId === addWeeks(current, 1)) return "Next week";
-  if (weekId === addWeeks(current, -1)) return "Last week";
-  return "Week";
+  if (weekId === current) return t("This week");
+  if (weekId === addWeeks(current, 1)) return t("Next week");
+  if (weekId === addWeeks(current, -1)) return t("Last week");
+  return t("Week");
 }
 
 export function weekRange(weekId: string): string {
   const start = fromId(weekId);
   const end = fromId(weekId);
   end.setDate(end.getDate() + 6);
-  const day = (date: Date) => date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-  return `${day(start)} to ${day(end)}`;
+  const day = (date: Date) => date.toLocaleDateString(locale(), { day: "numeric", month: "short" });
+  return t("{start} to {end}", { start: day(start), end: day(end) });
 }
 
 export function dayDate(weekId: string, dayIndex: number): string {
   const date = fromId(weekId);
   date.setDate(date.getDate() + dayIndex);
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return date.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 }
 
 export function formatQuantity(quantity: number | null | undefined, unit: string | undefined): string {

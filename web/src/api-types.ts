@@ -502,6 +502,8 @@ export interface components {
             pack?: string;
             /** Note, e.g. "you have some at home" */
             note?: string;
+            /** Label: the name in the household's language */
+            label?: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -512,6 +514,8 @@ export interface components {
         Ingredient: {
             /** Name */
             name: string;
+            /** Label: how it is shown in Portuguese households ("" = the name) */
+            label?: string;
             /** Quantity */
             quantity?: number | null;
             /**
@@ -565,6 +569,8 @@ export interface components {
             push_devices: number;
             /** Setup Done */
             setup_done: boolean;
+            /** Language */
+            language: "en" | "pt";
         };
         /**
          * Macros
@@ -614,6 +620,7 @@ export interface components {
         /** PantryDraft */
         PantryDraft: {
             name: string;
+            label?: string;
             quantity?: number | null;
             unit?: string;
             aisle?: components["schemas"]["Ingredient"]["aisle"];
@@ -622,6 +629,7 @@ export interface components {
         PantryItem: {
             id?: string;
             name: string;
+            label?: string;
             quantity?: number | null;
             unit?: string;
             aisle?: components["schemas"]["Ingredient"]["aisle"];
@@ -690,6 +698,8 @@ export interface components {
         Recipe: {
             /** Title */
             title: string;
+            /** Language of the title, steps and ingredient labels */
+            language?: "en" | "pt";
             /** Equipment */
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[];
             /**
@@ -752,6 +762,8 @@ export interface components {
         RecipeDraft: {
             /** Title */
             title: string;
+            /** Language of the title, steps and ingredient labels */
+            language?: "en" | "pt";
             /** Equipment */
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[];
             /**
@@ -887,6 +899,8 @@ export interface components {
             avoid?: string[];
             /** Equipment */
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[] | null;
+            /** Language: everyone in the household reads the app in it */
+            language?: "en" | "pt";
         };
         /** SiriItem */
         SiriItem: {

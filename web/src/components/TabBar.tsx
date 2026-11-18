@@ -1,18 +1,19 @@
 import { BookOpen, CalendarDays, ShoppingBasket, SlidersHorizontal } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
+import { t } from "../lib/i18n";
 import { defaultWeekId } from "../lib/weeks";
 
 const TABS = [
-  { to: "/plan", label: "Plan", Icon: CalendarDays },
-  { to: "/recipes", label: "Recipes", Icon: BookOpen },
-  { to: "/groceries", label: "Groceries", Icon: ShoppingBasket },
-  { to: "/settings", label: "Settings", Icon: SlidersHorizontal },
+  { to: "/plan", get label() { return t("Plan"); }, Icon: CalendarDays },
+  { to: "/recipes", get label() { return t("Recipes"); }, Icon: BookOpen },
+  { to: "/groceries", get label() { return t("Groceries"); }, Icon: ShoppingBasket },
+  { to: "/settings", get label() { return t("Settings"); }, Icon: SlidersHorizontal },
 ];
 
 export function TabBar({ badge }: { badge?: number }) {
   const { pathname } = useLocation();
   return (
-    <nav aria-label="Main" className="shrink-0 border-t border-line bg-card">
+    <nav aria-label={t("Main")} className="shrink-0 border-t border-line bg-card">
       <div className="mx-auto flex max-w-2xl items-stretch justify-between px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
         {TABS.map(({ to, label, Icon }) => {
           const on = pathname.startsWith(to);

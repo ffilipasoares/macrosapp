@@ -7,6 +7,7 @@ import { ErrorNote, Loading, Stepper, messageOf, primaryButton } from "../compon
 import { DAYS, MEALS, defaultWeekId } from "../lib/weeks";
 import { useSession } from "../session";
 import type { Settings } from "../types";
+import { phoneLanguage, setLanguage, t, type Language } from "../lib/i18n";
 
 /**
  * First-use setup: one question per screen, each skippable, ending with the first plan.
@@ -22,12 +23,18 @@ export function SetupPage() {
   const [added, setAdded] = useState<string[]>([]);
   const [busy, setBusy] = useState<"link" | "plan" | "skip" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Kept in state too, so choosing a language draws the setup again in it.
+  const [lang, setLang] = useState<Language>("en");
 
   useEffect(() => {
     api
       .getSettings()
       .then((loaded) => {
-        setSettings(loaded);
+        // A new household starts in the phone's language; the first question can change it.
+        const language: Language = phoneLanguage();
+        setLanguage(language);
+        setLang(language);
+        setSettings({ ...loaded, language });
         const first = Object.values(loaded.slots ?? {}).find((slot) => slot.cook);
         if (first?.portions) setPeople(first.portions);
       })
@@ -83,15 +90,31 @@ export function SetupPage() {
     }
   }
 
+  function chooseLanguage(language: Language) {
+    setLanguage(language);
+    setLang(language);
+    change({ language });
+  }
+
   const steps: { title: string; note: string; body: ReactNode }[] = [
     {
-      title: "How many people usually eat?",
-      note: "Every meal is planned for this many portions. You can change single meals later.",
-      body: <Stepper label="People" value={people} min={1} max={12} onChange={setPortions} />,
+      title: t("Which language?"),
+      note: t("For the app, your recipes and the grocery list. You can change it later in Settings."),
+      body: (
+        <div className="flex gap-2" role="group" aria-label={t("Language")}>
+          <Chip on={lang === "pt"} onClick={() => chooseLanguage("pt")}>Português</Chip>
+          <Chip on={lang === "en"} onClick={() => chooseLanguage("en")}>English</Chip>
+        </div>
+      ),
     },
     {
-      title: "Which meals do you cook?",
-      note: "Leave a meal off when you eat out or have leftovers.",
+      title: t("How many people usually eat?"),
+      note: t("Every meal is planned for this many portions. You can change single meals later."),
+      body: <Stepper label={t("People")} value={people} min={1} max={12} onChange={setPortions} />,
+    },
+    {
+      title: t("Which meals do you cook?"),
+      note: t("Leave a meal off when you eat out or have leftovers."),
       body: (
         <div className="flex flex-col gap-2">
           {DAYS.map((day) => (
@@ -112,40 +135,40 @@ export function SetupPage() {
       ),
     },
     {
-      title: "When should next week's plan be ready?",
-      note: "You get a notification then, and can still change anything.",
+      title: t("When should next week's plan be ready?"),
+      note: t("You get a notification then, and can still change anything."),
       body: <PlanDayFields settings={settings} change={change} />,
     },
     {
-      title: "Do you follow a diet?",
-      note: "Choose any, or none. Every plan already aims for a balanced week.",
+      title: t("Do you follow a diet?"),
+      note: t("Choose any, or none. Every plan already aims for a balanced week."),
       body: <DietFields settings={settings} change={change} />,
     },
     {
-      title: "Any allergies?",
-      note: "Recipes with these are never planned.",
+      title: t("Any allergies?"),
+      note: t("Recipes with these are never planned."),
       body: <AllergyFields settings={settings} change={change} />,
     },
     {
-      title: "Foods you never eat?",
-      note: "Recipes with these are left out of your plans.",
+      title: t("Foods you never eat?"),
+      note: t("Recipes with these are left out of your plans."),
       body: <AvoidFields settings={settings} change={change} />,
     },
     {
-      title: "What's in your kitchen?",
-      note: "Only the big things. Recipes that need something you don't have are not planned.",
+      title: t("What's in your kitchen?"),
+      note: t("Only the big things. Recipes that need something you don't have are not planned."),
       body: <EquipmentFields settings={{ ...settings, equipment: settings.equipment ?? [] }} change={change} />,
     },
     {
-      title: "What's always in the house?",
-      note: "Left off your grocery list, e.g. olive oil, salt, rice.",
+      title: t("What's always in the house?"),
+      note: t("Left off your grocery list, e.g. olive oil, salt, rice."),
       body: (
-        <WordList words={settings.staples ?? []} onChange={(staples) => change({ staples })} placeholder="olive oil" label="Add a staple" />
+        <WordList words={settings.staples ?? []} onChange={(staples) => change({ staples })} placeholder={t("olive oil")} label={t("Add a staple")} />
       ),
     },
     {
-      title: "Add a recipe you love",
-      note: "Paste a link from a recipe site or TikTok. You can add more later from screenshots, voice or text. Or skip: your first plan will use new ideas from the web.",
+      title: t("Add a recipe you love"),
+      note: t("Paste a link from a recipe site or TikTok. You can add more later from screenshots, voice or text. Or skip: your first plan will use new ideas from the web."),
       body: (
         <div className="flex flex-col gap-3">
           {added.map((title) => (
@@ -162,12 +185,12 @@ export function SetupPage() {
               type="url"
               value={link}
               onChange={(e) => setLink(e.target.value)}
-              placeholder="https://"
-              aria-label="Recipe link"
+              placeholder={t("https://")}
+              aria-label={t("Recipe link")}
               className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
             />
             <button disabled={!link.trim() || busy !== null} className="whitespace-nowrap rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper disabled:opacity-30">
-              {busy === "link" ? "Reading…" : "Add"}
+              {busy === "link" ? t("Reading…") : t("Add")}
             </button>
           </form>
         </div>
@@ -179,7 +202,7 @@ export function SetupPage() {
   const current = steps[step];
   // Equipment counts as answered once its screen has been passed, even with nothing chosen.
   const next = () => {
-    if (step === 6 && settings.equipment == null) change({ equipment: [] });
+    if (step === 7 && settings.equipment == null) change({ equipment: [] });
     setStep(step + 1);
   };
 
@@ -188,14 +211,14 @@ export function SetupPage() {
       <header className="flex items-center justify-between">
         {step > 0 ? (
           <button className="flex items-center gap-1 text-sm font-semibold text-ink-soft" onClick={() => setStep(step - 1)}>
-            <ChevronLeft size={18} /> Back
+            <ChevronLeft size={18} /> {t("Back")}
           </button>
         ) : (
           <span />
         )}
-        <span className="text-sm text-ink-soft">{last ? "Ready" : `${step + 1} of ${steps.length}`}</span>
+        <span className="text-sm text-ink-soft">{last ? t("Ready") : t("{n} of {total}", { n: step + 1, total: steps.length })}</span>
         <button className="text-sm font-semibold text-ink-soft" disabled={busy !== null} onClick={() => finish(false)}>
-          {busy === "skip" ? "Saving…" : "Skip setup"}
+          {busy === "skip" ? t("Saving…") : t("Skip setup")}
         </button>
       </header>
 
@@ -205,9 +228,9 @@ export function SetupPage() {
 
       {last ? (
         <section className="flex flex-1 flex-col gap-3">
-          <h1 className="text-3xl font-bold tracking-tight">Ready for your first plan</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("Ready for your first plan")}</h1>
           <p className="text-ink-soft">
-            The app now plans a balanced week around what you told it. Swap anything you don't fancy, then tap “Give me the grocery list”.
+            {t("The app now plans a balanced week around what you told it. Swap anything you don't fancy, then tap “Give me the grocery list”.")}
           </p>
         </section>
       ) : (
@@ -224,11 +247,11 @@ export function SetupPage() {
 
       {last ? (
         <button className={primaryButton} disabled={busy !== null} onClick={() => finish(true)}>
-          {busy === "plan" ? "Planning your week… this can take a minute" : "Make my first plan"}
+          {busy === "plan" ? t("Planning your week… this can take a minute") : t("Make my first plan")}
         </button>
       ) : (
         <button className={primaryButton} disabled={busy !== null} onClick={next}>
-          Next
+          {t("Next")}
         </button>
       )}
     </main>

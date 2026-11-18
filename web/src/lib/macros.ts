@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { Macros, ReferencePortion } from "../types";
 
 export const DEFAULT_PORTION: ReferencePortion = { kind: "serving", grams: 400 };
@@ -16,5 +17,5 @@ export function perPortion(macros: Macros, servings: number, reference: Referenc
 }
 
 export function portionLabel(reference: ReferencePortion = DEFAULT_PORTION): string {
-  return reference.kind === "grams" ? `per ${reference.grams} g` : "per serving";
+  return reference.kind === "grams" ? t("per {g} g", { g: reference.grams }) : t("per serving");
 }

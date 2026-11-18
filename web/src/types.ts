@@ -1,5 +1,6 @@
 // Data shapes come from the Python API (see `npm run gen:types`), so the two cannot drift apart.
 import type { components } from "./api-types";
+import { t } from "./lib/i18n";
 
 type Schemas = components["schemas"];
 
@@ -20,15 +21,15 @@ export type SkipResult = Schemas["SkipResult"];
 export type Aisle = Ingredient["aisle"];
 
 export const AISLES: { key: NonNullable<Aisle>; label: string }[] = [
-  { key: "produce", label: "Fruit and vegetables" },
-  { key: "meat_fish", label: "Meat and fish" },
-  { key: "dairy_eggs", label: "Dairy and eggs" },
-  { key: "bakery", label: "Bakery" },
-  { key: "pantry", label: "Pantry" },
-  { key: "frozen", label: "Frozen" },
-  { key: "drinks", label: "Drinks" },
-  { key: "household", label: "Household" },
-  { key: "other", label: "Other" },
+  { key: "produce", get label() { return t("Fruit and vegetables"); } },
+  { key: "meat_fish", get label() { return t("Meat and fish"); } },
+  { key: "dairy_eggs", get label() { return t("Dairy and eggs"); } },
+  { key: "bakery", get label() { return t("Bakery"); } },
+  { key: "pantry", get label() { return t("Pantry"); } },
+  { key: "frozen", get label() { return t("Frozen"); } },
+  { key: "drinks", get label() { return t("Drinks"); } },
+  { key: "household", get label() { return t("Household"); } },
+  { key: "other", get label() { return t("Other"); } },
 ];
 
 export const PROTEINS = [
@@ -45,18 +46,18 @@ export type Category = NonNullable<Recipe["category"]>;
 
 /** Kinds of dish. Only main dishes go into the weekly plan. */
 export const CATEGORIES: { key: Category; label: string; plural: string }[] = [
-  { key: "main", label: "Main dish", plural: "Main dishes" },
-  { key: "breakfast", label: "Breakfast", plural: "Breakfasts" },
-  { key: "dessert", label: "Dessert", plural: "Desserts" },
-  { key: "snack", label: "Snack", plural: "Snacks" },
-  { key: "side", label: "Side", plural: "Sides" },
-  { key: "drink", label: "Drink", plural: "Drinks" },
+  { key: "main", get label() { return t("Main dish"); }, get plural() { return t("Main dishes"); } },
+  { key: "breakfast", get label() { return t("Breakfast"); }, get plural() { return t("Breakfasts"); } },
+  { key: "dessert", get label() { return t("Dessert"); }, get plural() { return t("Desserts"); } },
+  { key: "snack", get label() { return t("Snack"); }, get plural() { return t("Snacks"); } },
+  { key: "side", get label() { return t("Side"); }, get plural() { return t("Sides"); } },
+  { key: "drink", get label() { return t("Drink"); }, get plural() { return t("Drinks"); } },
 ];
 
 /** How main dishes are grouped on the Recipes page, by their main protein. */
 export const PROTEIN_GROUPS: { label: string; proteins: string[] }[] = [
-  { label: "Chicken & poultry", proteins: ["chicken", "turkey"] },
-  { label: "Fish & seafood", proteins: ["fish", "seafood"] },
-  { label: "Meat", proteins: ["beef", "pork", "lamb"] },
-  { label: "Vegetarian & vegan", proteins: ["vegetarian", "vegan", "egg"] },
+  { get label() { return t("Chicken & poultry"); }, proteins: ["chicken", "turkey"] },
+  { get label() { return t("Fish & seafood"); }, proteins: ["fish", "seafood"] },
+  { get label() { return t("Meat"); }, proteins: ["beef", "pork", "lamb"] },
+  { get label() { return t("Vegetarian & vegan"); }, proteins: ["vegetarian", "vegan", "egg"] },
 ];

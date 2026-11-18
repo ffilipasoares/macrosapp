@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Mic, RotateCcw, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { t } from "../lib/i18n";
 
 const MAX_SECONDS = 10 * 60;
 
@@ -45,7 +46,7 @@ export function VoiceRecorder({ onRecorded, disabled }: { onRecorded: (file: Fil
   async function start() {
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setError("Recording isn't available here. Choose a voice memo instead.");
+      setError(t("Recording isn't available here. Choose a voice memo instead."));
       return;
     }
     try {
@@ -54,8 +55,8 @@ export function VoiceRecorder({ onRecorded, disabled }: { onRecorded: (file: Fil
       const blocked = (e as { name?: string }).name === "NotAllowedError";
       setError(
         blocked
-          ? "Microphone access is blocked. Allow it for this app in your phone's settings, then try again."
-          : "The microphone could not be started.",
+          ? t("Microphone access is blocked. Allow it for this app in your phone's settings, then try again.")
+          : t("The microphone could not be started."),
       );
       return;
     }
@@ -69,7 +70,7 @@ export function VoiceRecorder({ onRecorded, disabled }: { onRecorded: (file: Fil
       const blob = new Blob(chunks, { type });
       if (!blob.size) {
         setState("idle");
-        setError("Nothing was recorded. Try again.");
+        setError(t("Nothing was recorded. Try again."));
         return;
       }
       const file = new File([blob], `voice-recipe.${type.includes("mp4") ? "m4a" : "webm"}`, { type });
@@ -105,9 +106,9 @@ export function VoiceRecorder({ onRecorded, disabled }: { onRecorded: (file: Fil
     <div className="flex flex-col items-center gap-4 rounded-3xl bg-card px-4 py-6 text-center ring-1 ring-line">
       {state === "done" && playback ? (
         <>
-          <audio controls src={playback} className="w-full" aria-label="Your recording" />
+          <audio controls src={playback} className="w-full" aria-label={t("Your recording")} />
           <button type="button" onClick={reset} disabled={disabled} className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-soft hover:bg-paper hover:text-ink">
-            <RotateCcw size={16} /> Record again
+            <RotateCcw size={16} /> {t("Record again")}
           </button>
         </>
       ) : (
@@ -116,7 +117,7 @@ export function VoiceRecorder({ onRecorded, disabled }: { onRecorded: (file: Fil
             type="button"
             onClick={state === "recording" ? stop : start}
             disabled={disabled}
-            aria-label={state === "recording" ? "Stop recording" : "Start recording"}
+            aria-label={state === "recording" ? t("Stop recording") : t("Start recording")}
             whileTap={{ scale: 0.94 }}
             className={`relative grid h-20 w-20 place-items-center rounded-full text-card ${state === "recording" ? "bg-orange" : "bg-ink"}`}
           >
@@ -135,7 +136,7 @@ export function VoiceRecorder({ onRecorded, disabled }: { onRecorded: (file: Fil
             )}
           </motion.button>
           <p className="text-sm font-semibold tabular-nums" aria-live="polite">
-            {state === "recording" ? `Recording ${clock(seconds)} · tap to stop` : "Tap to start talking"}
+            {state === "recording" ? t("Recording {time} · tap to stop", { time: clock(seconds) }) : t("Tap to start talking")}
           </p>
         </>
       )}

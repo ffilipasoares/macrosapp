@@ -2,6 +2,7 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, ApiError } from "./api";
 import { auth } from "./firebase";
+import { setLanguage } from "./lib/i18n";
 import type { Me } from "./types";
 
 type Session =
@@ -21,7 +22,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async (user: User | null) => {
     if (!user) return setSession({ state: "signed-out" });
     try {
-      setSession({ state: "ready", user, me: await api.me() });
+      const me = await api.me();
+      setLanguage(me.language);
+      setSession({ state: "ready", user, me });
     } catch (error) {
       const message =
         error instanceof ApiError && error.status === 403

@@ -25,6 +25,7 @@ import { DAYS, MEALS, addWeeks, defaultWeekId, formatQuantity, isWeekId, weekLab
 import { MacrosCard } from "../components/MacrosCard";
 import { perPortion } from "../lib/macros";
 import { CATEGORIES, type Alternative, type Plan, type PlanMeal, type ReferencePortion, type Rule, type Settings, type WeekBalance } from "../types";
+import { foodName, t, tn } from "../lib/i18n";
 
 export function PlanPage() {
   const { weekId } = useParams();
@@ -153,14 +154,14 @@ export function PlanPage() {
             <div className="flex shrink-0 gap-1">
               <button
                 onClick={() => navigate(`/plan/${addWeeks(weekId, -1)}`)}
-                aria-label="Previous week"
+                aria-label={t("Previous week")}
                 className="grid h-10 w-10 place-items-center rounded-full text-ink-soft transition-colors duration-150 ease-out hover:bg-card hover:text-ink"
               >
                 <ChevronLeft size={22} />
               </button>
               <button
                 onClick={() => navigate(`/plan/${addWeeks(weekId, 1)}`)}
-                aria-label="Next week"
+                aria-label={t("Next week")}
                 className="grid h-10 w-10 place-items-center rounded-full text-ink-soft transition-colors duration-150 ease-out hover:bg-card hover:text-ink"
               >
                 <ChevronRight size={22} />
@@ -171,7 +172,7 @@ export function PlanPage() {
           <ErrorNote message={error} />
 
           {loading ? (
-            <Loading label="Loading the plan" />
+            <Loading label={t("Loading the plan")} />
           ) : showEmpty ? (
             <EmptyWeek planning={busy === "generate"} onGenerate={generate} />
           ) : (
@@ -183,9 +184,9 @@ export function PlanPage() {
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold">
-                      {listCount !== null ? `${listCount} things added to your grocery list` : "This plan is on your grocery list"}
+                      {listCount !== null ? tn(listCount, "{n} thing added to your grocery list", "{n} things added to your grocery list") : t("This plan is on your grocery list")}
                     </span>
-                    <span className="block text-sm text-ink-soft">Change a meal and the plan goes back to draft.</span>
+                    <span className="block text-sm text-ink-soft">{t("Change a meal and the plan goes back to draft.")}</span>
                   </span>
                   <ChevronRight size={20} className="shrink-0 text-ink-soft" />
                 </Link>
@@ -200,14 +201,14 @@ export function PlanPage() {
               {settings && sameDiets(plan!.diets ?? [], settings.diets ?? []) ? null : (
                 <section className="flex flex-col gap-3 rounded-2xl bg-periwinkle-soft px-4 py-3">
                   <p className="text-sm">
-                    <span className="font-semibold">Your diets changed since this plan was made.</span>{" "}
+                    <span className="font-semibold">{t("Your diets changed since this plan was made.")}</span>{" "}
                     {(settings?.diets ?? []).length
-                      ? `Now: ${(settings?.diets ?? []).join(", ")}.`
-                      : "You no longer have a diet chosen."}{" "}
-                    Meals that already fit stay; the others are replaced.
+                      ? t("Now: {diets}.", { diets: (settings?.diets ?? []).join(", ") })
+                      : t("You no longer have a diet chosen.")}{" "}
+                    {t("Meals that already fit stay; the others are replaced.")}
                   </p>
                   <button onClick={applyDiets} disabled={busy !== null} className={`self-start ${darkButton} py-2 text-sm`}>
-                    {busy === "diets" ? "Updating…" : "Update this week"}
+                    {busy === "diets" ? t("Updating…") : t("Update this week")}
                   </button>
                 </section>
               )}
@@ -250,7 +251,7 @@ export function PlanPage() {
                               {meal ? (
                                 <DraggableMeal
                                   slot={slot.key}
-                                  label={`${day.name} ${slot.name.toLowerCase()}: ${meal.recipe.title}`}
+                                  label={t("{day} {meal}: {title}", { day: day.name, meal: slot.name.toLowerCase(), title: meal.recipe.title })}
                                   disabled={swapping !== null || busy !== null}
                                   onHover={setDropTarget}
                                   onDrop={(to) => moveMeal(slot.key, to)}
@@ -274,7 +275,7 @@ export function PlanPage() {
                 disabled={busy !== null}
                 className="mx-auto flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-ink-soft transition-colors duration-150 ease-out hover:bg-card hover:text-ink disabled:opacity-50"
               >
-                <Shuffle size={16} /> Generate a new plan
+                <Shuffle size={16} /> {t("Generate a new plan")}
               </button>
             </>
           )}
@@ -290,7 +291,7 @@ export function PlanPage() {
             disabled={busy !== null || !hasMeals}
             className="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-orange py-4 text-base font-bold text-card disabled:opacity-50"
           >
-            <ShoppingBasket size={20} /> {busy === "approve" ? "Building the list…" : "Give me the grocery list"}
+            <ShoppingBasket size={20} /> {busy === "approve" ? t("Building the list…") : t("Give me the grocery list")}
           </motion.button>
         </div>
       ) : null}
@@ -325,7 +326,8 @@ function dayNumber(weekId: string, dayIndex: number): string {
 function slotName(slot: string): string {
   const [dayKey, mealKey] = slot.split("_");
   const day = DAYS.find((d) => d.key === dayKey)?.name ?? dayKey;
-  return `${day} ${mealKey}`;
+  const meal = (MEALS.find((m) => m.key === mealKey)?.name ?? mealKey).toLowerCase();
+  return t("{day} {meal}", { day, meal });
 }
 
 /** Rules as dots: one per meal the rule asks for, filled as the plan meets it. */
@@ -338,7 +340,7 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
 
   if (entries.length === 0) return null;
   return (
-    <section aria-label="Your rules" className="flex flex-wrap items-center gap-x-5 gap-y-2">
+    <section aria-label={t("Your rules")} className="flex flex-wrap items-center gap-x-5 gap-y-2">
       {entries.map(({ status, rule }) => {
         if (rule?.kind === "min" && rule.count > 0 && rule.count <= 8) {
           const style = proteinStyle(rule.tag);
@@ -363,8 +365,8 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
       })}
       {short.length === 1 && broken.length === 1 ? (
         <p className="w-full text-sm text-ink-soft">
-          {short[0].rule!.count - short[0].status.count === 1 ? "One more" : `${short[0].rule!.count - short[0].status.count} more`}{" "}
-          {proteinStyle(short[0].rule!.tag).label.toLowerCase()} and every rule is kept.
+          {short[0].rule!.count - short[0].status.count === 1 ? t("One more") : t("{n} more", { n: short[0].rule!.count - short[0].status.count })}{" "}
+          {proteinStyle(short[0].rule!.tag).label.toLowerCase()} {t("and every rule is kept.")}
         </p>
       ) : null}
     </section>
@@ -376,9 +378,9 @@ function BalanceCard({ balance }: { balance: WeekBalance }) {
   const [open, setOpen] = useState(false);
   const missing = balance.checks.filter((check) => !check.ok);
   return (
-    <section aria-label="Week balance" className="rounded-2xl bg-white/60 px-4 py-3">
+    <section aria-label={t("Week balance")} className="rounded-2xl bg-white/60 px-4 py-3">
       <button onClick={() => setOpen(!open)} aria-expanded={open} className="w-full text-left text-sm font-semibold">
-        {balance.balanced ? "Balanced week ✓" : missing.length === 1 ? `Nearly balanced: ${missing[0].label.toLowerCase()}` : `${missing.length} things to balance`}
+        {balance.balanced ? t("Balanced week ✓") : missing.length === 1 ? t("Nearly balanced: {what}", { what: missing[0].label.toLowerCase() }) : t("{n} things to balance", { n: missing.length })}
       </button>
       {open ? (
         <div className="mt-3 flex flex-col gap-3 text-sm">
@@ -389,13 +391,13 @@ function BalanceCard({ balance }: { balance: WeekBalance }) {
                   {check.ok ? "✓" : "!"} {check.label}
                 </span>
                 <span className="text-ink-soft">
-                  {check.detail} · {check.key === "red_meat" ? "at most" : "at least"} {check.target}
+                  {check.detail} · {check.key === "red_meat" ? t("at most") : t("at least")} {check.target}
                 </span>
               </li>
             ))}
           </ul>
           {balance.reviewed ? null : (
-            <p className="text-xs text-ink-soft">General guidance, not yet reviewed by a nutritionist.</p>
+            <p className="text-xs text-ink-soft">{t("General guidance, not yet reviewed by a nutritionist.")}</p>
           )}
         </div>
       ) : null}
@@ -447,8 +449,8 @@ function DraggableMeal({
     >
       <button
         type="button"
-        aria-label={`Drag to move ${label} to another day`}
-        title="Drag to another day"
+        aria-label={t("Drag to move {what} to another day", { what: label })}
+        title={t("Drag to another day")}
         disabled={disabled}
         onPointerDown={(event) => {
           if (!disabled) controls.start(event);
@@ -490,7 +492,7 @@ function MealRow({
         </span>
         <span className="min-w-0">
           <span className="block text-xs font-medium text-ink-soft">{name}</span>
-          <span className="block font-semibold">Choose a meal</span>
+          <span className="block font-semibold">{t("Choose a meal")}</span>
         </span>
       </button>
     );
@@ -505,15 +507,15 @@ function MealRow({
         <span className="block truncate font-semibold">{meal.recipe.title}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-soft">
           <ProteinDot protein={meal.recipe.protein} />
-          <span>{meal.portions} portions</span>
+          <span>{tn(meal.portions, "{n} portion", "{n} portions")}</span>
           {meal.recipe.macros ? <span>{perPortion(meal.recipe.macros, meal.recipe.servings ?? 1, reference).kcal} kcal</span> : null}
           {meal.is_new ? <NewIdea /> : null}
         </span>
         {meal.carried_from || (meal.uses_pantry ?? []).length ? (
           <span className="mt-0.5 block truncate text-xs text-green">
-            {meal.carried_from ? `Moved from ${slotName(meal.carried_from.split(" ")[1] ?? "")}` : ""}
+            {meal.carried_from ? t("Moved from {when}", { when: slotName(meal.carried_from.split(" ")[1] ?? "") }) : ""}
             {meal.carried_from && (meal.uses_pantry ?? []).length ? " · " : ""}
-            {(meal.uses_pantry ?? []).length ? `Uses ${meal.uses_pantry!.join(", ")} from home` : ""}
+            {(meal.uses_pantry ?? []).length ? t("Uses {foods} from home", { foods: meal.uses_pantry!.join(", ") }) : ""}
           </span>
         ) : null}
       </span>
@@ -522,8 +524,8 @@ function MealRow({
         <button
           onClick={onSwap}
           disabled={swapDisabled}
-          aria-label={`Swap ${name.toLowerCase()}: ${meal.recipe.title}`}
-          title="Swap for another recipe"
+          aria-label={t("Swap {meal}: {title}", { meal: name.toLowerCase(), title: meal.recipe.title })}
+          title={t("Swap for another recipe")}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-ink-soft transition-colors duration-150 ease-out hover:bg-card hover:text-ink disabled:opacity-40"
         >
           <RefreshCw size={18} className={swapping ? "animate-spin" : ""} />
@@ -539,14 +541,14 @@ function EmptyWeek({ planning, onGenerate }: { planning: boolean; onGenerate: ()
   return (
     <section className="mt-6 flex flex-col items-center gap-4 px-4 py-10 text-center">
       <Dots bouncing={planning} />
-      <h2 className="text-xl font-bold">{planning ? "Planning your week…" : "No plan for this week yet"}</h2>
+      <h2 className="text-xl font-bold">{planning ? t("Planning your week…") : t("No plan for this week yet")}</h2>
       <p className="max-w-xs text-sm text-ink-soft">
         {planning
-          ? "Picking from your recipes and finding new ones on the web. This can take up to two minutes."
-          : "Generate one from your recipes and rules. A plan for next week is also drafted every Friday."}
+          ? t("Picking from your recipes and finding new ones on the web. This can take up to two minutes.")
+          : t("Generate one from your recipes and rules. A plan for next week is also drafted on the day set in Settings.")}
       </p>
       <button onClick={onGenerate} disabled={planning} className={`mt-2 ${primaryButton}`}>
-        Generate plan
+        {t("Generate plan")}
       </button>
     </section>
   );
@@ -621,14 +623,14 @@ function MealScreen({
     return (
       <Overlay>
         <div className="mx-auto flex max-w-2xl flex-col gap-4 px-5 pb-10 pt-[calc(1.25rem+env(safe-area-inset-top))]">
-          <h1 className="text-[28px] font-bold leading-tight tracking-tight">Moved to next week</h1>
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight">{t("Moved to next week")}</h1>
           <p className="text-ink-soft">
-            {meal?.recipe.title} is now next {slotName(movedSlot ?? "")}. Its food stays in your pantry, so it won't be bought again.
+            {t("{title} is now on next week's {when}. Its food stays in your pantry, so it won't be bought again.", { title: meal?.recipe.title ?? "", when: slotName(movedSlot ?? "") })}
           </p>
           {skipped.warnings.map((warning) => (
             <p key={warning} className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm font-medium">{warning}</p>
           ))}
-          <button onClick={onClose} className={darkButton}>Done</button>
+          <button onClick={onClose} className={darkButton}>{t("Done")}</button>
         </div>
       </Overlay>
     );
@@ -638,8 +640,8 @@ function MealScreen({
     return (
       <Overlay>
         <div className="mx-auto flex max-w-2xl flex-col gap-4 px-5 pb-10 pt-[calc(1.25rem+env(safe-area-inset-top))]">
-          <h1 className="text-[28px] font-bold leading-tight tracking-tight">Next week is full</h1>
-          <p className="text-ink-soft">Which meal should {meal?.recipe.title} replace?</p>
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight">{t("Next week is full")}</h1>
+          <p className="text-ink-soft">{t("Which meal should {title} replace?", { title: meal?.recipe.title ?? "" })}</p>
           <ErrorNote message={error} />
           <ul className="flex flex-col gap-1">
             {skipChoice.map((choice) => (
@@ -650,7 +652,7 @@ function MealScreen({
               </li>
             ))}
           </ul>
-          <button onClick={() => setSkipChoice(null)} className={quietButton}>Cancel</button>
+          <button onClick={() => setSkipChoice(null)} className={quietButton}>{t("Cancel")}</button>
         </div>
       </Overlay>
     );
@@ -669,16 +671,16 @@ function MealScreen({
         <div className="mx-auto flex max-w-2xl flex-col gap-6 px-5 pb-10 pt-[calc(1.25rem+env(safe-area-inset-top))]">
           <header className="flex items-center gap-2">
             <BackButton onClick={meal ? () => setChoosing(false) : onClose} />
-            <h1 className="min-w-0 truncate text-xl font-bold">Choose for {slotName(slot)}</h1>
+            <h1 className="min-w-0 truncate text-xl font-bold">{t("Choose for {when}", { when: slotName(slot) })}</h1>
           </header>
           <ErrorNote message={error} />
           {!options ? (
-            <Loading label="Finding options" />
+            <Loading label={t("Finding options")} />
           ) : options.length === 0 ? (
             <p className="text-ink-soft">
-              Your library has no other recipes yet.{" "}
+              {t("Your library has no other recipes yet.")}{" "}
               <Link to="/recipes" className="font-semibold text-blue underline-offset-4 hover:underline">
-                Add more recipes
+                {t("Add more recipes")}
               </Link>
             </p>
           ) : (
@@ -690,17 +692,17 @@ function MealScreen({
                   type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`Search all ${options.length} recipes`}
-                  aria-label="Search your recipes"
+                  placeholder={t("Search all {n} recipes", { n: options.length })}
+                  aria-label={t("Search your recipes")}
                   className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-soft/80"
                 />
               </label>
               {suggested.length ? (
-                <OptionList title="Suggested" tone="text-green" options={suggested} today={today} disabled={saving} onPick={(id) => change(id)} />
+                <OptionList title={t("Suggested")} tone="text-green" options={suggested} today={today} disabled={saving} onPick={(id) => change(id)} />
               ) : null}
               {rest.length ? (
                 <OptionList
-                  title={suggested.length ? "Everything else in your library" : "Your library"}
+                  title={suggested.length ? t("Everything else in your library") : t("Your library")}
                   tone="text-ink-soft"
                   options={rest}
                   today={today}
@@ -749,18 +751,18 @@ function MealScreen({
 
         <section className="flex items-center justify-between gap-4 border-y border-line py-4">
           <div className="min-w-0">
-            <div className="font-semibold">Portions</div>
-            <div className="text-sm text-ink-soft">Ingredients scale to match</div>
+            <div className="font-semibold">{t("Portions")}</div>
+            <div className="text-sm text-ink-soft">{t("Ingredients scale to match")}</div>
           </div>
-          <Stepper label="Portions" value={meal!.portions} onChange={(value) => change(recipe.id ?? null, value, false)} />
+          <Stepper label={t("Portions")} value={meal!.portions} onChange={(value) => change(recipe.id ?? null, value, false)} />
         </section>
 
         <section>
-          <h2 className="text-lg font-bold">Ingredients</h2>
+          <h2 className="text-lg font-bold">{t("Ingredients")}</h2>
           <ul className="mt-2">
             {(recipe.ingredients ?? []).map((ingredient, index) => (
               <li key={index} className="flex items-baseline justify-between gap-4 border-b border-line py-2.5 last:border-b-0">
-                <span className="first-letter:uppercase">{ingredient.name}</span>
+                <span className="first-letter:uppercase">{foodName(ingredient)}</span>
                 <span className="shrink-0 font-semibold tabular-nums text-ink-soft">
                   {formatQuantity(ingredient.quantity == null ? null : ingredient.quantity * factor, ingredient.unit)}
                 </span>
@@ -771,7 +773,7 @@ function MealScreen({
 
         {(recipe.steps ?? []).length > 0 && (
           <section>
-            <h2 className="text-lg font-bold">Method</h2>
+            <h2 className="text-lg font-bold">{t("Method")}</h2>
             <ol className="mt-3 flex flex-col gap-4">
               {recipe.steps!.map((step, i) => (
                 <li key={i} className="grid grid-cols-[24px_minmax(0,1fr)] gap-3">
@@ -785,23 +787,23 @@ function MealScreen({
 
         {recipe.source_url ? (
           <a href={recipe.source_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-sm font-semibold text-blue underline-offset-4 hover:underline">
-            Original recipe <ExternalLink size={14} />
+            {t("Original recipe")} <ExternalLink size={14} />
           </a>
         ) : null}
 
         <div className="flex gap-3 border-t border-line pt-6">
           <button onClick={() => setChoosing(true)} disabled={saving} className={`flex-1 ${darkButton}`}>
-            Swap meal
+            {t("Swap meal")}
           </button>
           <button onClick={() => change(null)} disabled={saving} className={`flex-1 ${quietButton} text-orange`}>
-            Remove
+            {t("Remove")}
           </button>
         </div>
         <button onClick={() => void skip()} disabled={saving} className={quietButton}>
-          I'm not cooking this
+          {t("I'm not cooking this")}
         </button>
         <p className="-mt-3 text-center text-xs text-ink-soft">
-          Keeps its food in your pantry and moves it to next week. Works the day after too.
+          {t("Keeps its food in your pantry and moves it to next week. Works the day after too.")}
         </p>
       </div>
     </Overlay>
@@ -824,9 +826,9 @@ function optionNotes(option: Alternative): string[] {
   const notes: string[] = (option.warnings ?? []).map((w) => w.charAt(0).toUpperCase() + w.slice(1));
   const category = option.recipe.category ?? "main";
   if (category !== "main") notes.push(CATEGORIES.find((c) => c.key === category)?.label ?? category);
-  if (option.already_planned) notes.push("Already this week");
-  if (option.fits_diets === false) notes.push("Outside your diets");
-  if (!option.keeps_rules) notes.push("Breaks a rule");
+  if (option.already_planned) notes.push(t("Already this week"));
+  if (option.fits_diets === false) notes.push(t("Outside your diets"));
+  if (!option.keeps_rules) notes.push(t("Breaks a rule"));
   return notes;
 }
 

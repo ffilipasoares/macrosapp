@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Minus, Plus, X } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { ease, proteinStyle } from "../lib/style";
+import { t } from "../lib/i18n";
 
 /** Bottom sheet: slides up over the screen. */
 export function Sheet({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode }) {
@@ -36,7 +37,7 @@ export function Sheet({ title, subtitle, onClose, children }: { title: string; s
             <h2 className="text-xl font-bold">{title}</h2>
             {subtitle ? <p className="mt-1 text-sm text-ink-soft">{subtitle}</p> : null}
           </div>
-          <button onClick={onClose} aria-label="Close" className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-card text-ink-soft">
+          <button onClick={onClose} aria-label={t("Close")} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-card text-ink-soft">
             <X size={18} />
           </button>
         </div>
@@ -70,7 +71,7 @@ export function BackButton({ onClick, floating = false }: { onClick: () => void;
   return (
     <button
       onClick={onClick}
-      aria-label="Back"
+      aria-label={t("Back")}
       className={
         floating
           ? "absolute left-4 top-[calc(1rem+env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-full bg-card/90 text-ink"
@@ -98,9 +99,9 @@ export function Stepper({ value, onChange, min = 1, max = 30, label }: { value: 
   );
   return (
     <div className="flex items-center gap-2" role="group" aria-label={label}>
-      {step(-1, "Fewer", <Minus size={18} />, value <= min)}
+      {step(-1, t("Fewer"), <Minus size={18} />, value <= min)}
       <span className="w-8 text-center text-2xl font-bold tabular-nums">{value}</span>
-      {step(1, "More", <Plus size={18} />, value >= max)}
+      {step(1, t("More"), <Plus size={18} />, value >= max)}
     </div>
   );
 }
@@ -152,7 +153,7 @@ export function ProteinDot({ protein, withLabel = true }: { protein?: string | n
 }
 
 export function NewIdea() {
-  return <span className="rounded-full bg-periwinkle-soft px-2 py-0.5 text-xs font-semibold text-ink">New idea</span>;
+  return <span className="rounded-full bg-periwinkle-soft px-2 py-0.5 text-xs font-semibold text-ink">{t("New idea")}</span>;
 }
 
 export function ErrorNote({ message }: { message: string | null }) {
@@ -163,7 +164,7 @@ export function ErrorNote({ message }: { message: string | null }) {
   ) : null;
 }
 
-export function Loading({ label = "Loading" }: { label?: string }) {
+export function Loading({ label = t("Loading") }: { label?: string }) {
   return (
     <div className="flex flex-col items-center gap-3 py-12 text-ink-soft" role="status">
       <Dots bouncing />
@@ -194,5 +195,5 @@ export const quietButton =
   "flex items-center justify-center gap-2 whitespace-nowrap rounded-full border border-line bg-card px-5 py-3 font-semibold text-ink disabled:opacity-40";
 export const listButton = "-mx-2 flex w-[calc(100%+16px)] items-center gap-3 rounded-2xl p-2 text-left transition-colors duration-150 ease-out hover:bg-card disabled:opacity-50";
 
-export const messageOf = (error: unknown) => (error instanceof Error ? error.message : "Something went wrong. Try again.");
+export const messageOf = (error: unknown) => (error instanceof Error ? error.message : t("Something went wrong. Try again."));
 

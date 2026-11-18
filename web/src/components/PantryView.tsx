@@ -5,6 +5,7 @@ import { formatQuantity } from "../lib/weeks";
 import type { PantryDraft, PantryItem } from "../types";
 import { ErrorNote, Loading, Sheet, messageOf } from "./ui";
 import { VoiceRecorder } from "./VoiceRecorder";
+import { foodName, language, locale, t } from "../lib/i18n";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -19,11 +20,11 @@ function daysUntil(isoDate: string): number {
 function useByLabel(item: PantryItem): { text: string; urgent: boolean } | null {
   if (!item.use_by) return null;
   const days = daysUntil(item.use_by);
-  if (days < 0) return { text: "probably past its best", urgent: true };
-  if (days === 0) return { text: "use today", urgent: true };
-  if (days === 1) return { text: "use by tomorrow", urgent: true };
-  const day = new Date(`${item.use_by}T12:00:00`).toLocaleDateString(undefined, { weekday: "long" });
-  return { text: `use by ${day}`, urgent: days <= 2 };
+  if (days < 0) return { text: t("probably past its best"), urgent: true };
+  if (days === 0) return { text: t("use today"), urgent: true };
+  if (days === 1) return { text: t("use by tomorrow"), urgent: true };
+  const day = new Date(`${item.use_by}T12:00:00`).toLocaleDateString(locale(), { weekday: "long" });
+  return { text: t("use by {day}", { day }), urgent: days <= 2 };
 }
 
 /**
@@ -118,15 +119,15 @@ export function PantryView() {
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="e.g. 2 eggs, half a courgette"
-            aria-label="Add food you have"
+            placeholder={t("e.g. 2 eggs, half a courgette")}
+            aria-label={t("Add food you have")}
             maxLength={2000}
             enterKeyHint="done"
             className="min-w-0 flex-1 bg-transparent py-1.5 outline-none placeholder:text-ink-soft/80"
           />
           <button
             disabled={busy !== null || !text.trim()}
-            aria-label="Add"
+            aria-label={t("Add")}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-orange text-card transition-opacity duration-150 ease-out disabled:opacity-30"
           >
             <Plus size={18} strokeWidth={2.5} />
@@ -138,14 +139,14 @@ export function PantryView() {
             disabled={busy !== null}
             className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm font-semibold ring-1 ring-line hover:ring-ink-soft disabled:opacity-40"
           >
-            <Camera size={16} /> {busy === "photo" ? "Looking…" : "Photo of the fridge"}
+            <Camera size={16} /> {busy === "photo" ? t("Looking…") : t("Photo of the fridge")}
           </button>
           <button
             onClick={() => setRecording(true)}
             disabled={busy !== null}
             className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm font-semibold ring-1 ring-line hover:ring-ink-soft disabled:opacity-40"
           >
-            <Mic size={16} /> {busy === "voice" ? "Listening…" : "Say it"}
+            <Mic size={16} /> {busy === "voice" ? t("Listening…") : t("Say it")}
           </button>
           <input ref={photos} type="file" accept="image/*" multiple hidden onChange={(e) => void readPhotos(e.target.files)} />
         </div>
@@ -154,33 +155,33 @@ export function PantryView() {
       <ErrorNote message={error} />
 
       {!items ? (
-        <Loading label="Loading the pantry" />
+        <Loading label={t("Loading the pantry")} />
       ) : all.length === 0 ? (
         <section className="px-4 py-10 text-center">
-          <h2 className="text-lg font-bold">Nothing at home yet</h2>
+          <h2 className="text-lg font-bold">{t("Nothing at home yet")}</h2>
           <p className="mx-auto mt-2 max-w-xs text-sm text-ink-soft">
-            Add what you have, or tap “Put away” after shopping. Plans then use it first, and the list only buys what is missing.
+            {t("Add what you have, or tap “Put away” after shopping. Plans then use it first, and the list only buys what is missing.")}
           </p>
         </section>
       ) : (
         <>
-          <PantrySection title="Use soon" items={soon} editing={editing} onEdit={setEditing} onSave={update} onRemove={remove} />
-          <PantrySection title="Fresh" items={fresh} editing={editing} onEdit={setEditing} onSave={update} onRemove={remove} />
-          <PantrySection title="Cupboard and freezer" items={keeps} editing={editing} onEdit={setEditing} onSave={update} onRemove={remove} />
-          <p className="text-xs text-ink-soft">Meals are taken out as their day passes. Fix any amount by tapping it.</p>
+          <PantrySection title={t("Use soon")} items={soon} editing={editing} onEdit={setEditing} onSave={update} onRemove={remove} />
+          <PantrySection title={t("Fresh")} items={fresh} editing={editing} onEdit={setEditing} onSave={update} onRemove={remove} />
+          <PantrySection title={t("Cupboard and freezer")} items={keeps} editing={editing} onEdit={setEditing} onSave={update} onRemove={remove} />
+          <p className="text-xs text-ink-soft">{t("Meals are taken out as their day passes. Fix any amount by tapping it.")}</p>
         </>
       )}
 
       {recording ? (
-        <Sheet title="Say what you have" subtitle="For example: six eggs, half a courgette and some rice." onClose={() => setRecording(false)}>
+        <Sheet title={t("Say what you have")} subtitle={t("For example: six eggs, half a courgette and some rice.")} onClose={() => setRecording(false)}>
           <VoiceRecorder onRecorded={(file) => void readVoice(file)} disabled={busy !== null} />
         </Sheet>
       ) : null}
 
       {drafts ? (
-        <Sheet title="Is this right?" subtitle="Fix anything, then add it to your pantry." onClose={() => setDrafts(null)}>
+        <Sheet title={t("Is this right?")} subtitle={t("Fix anything, then add it to your pantry.")} onClose={() => setDrafts(null)}>
           <div className="flex flex-col gap-2">
-            {drafts.length === 0 ? <p className="text-sm text-ink-soft">No food found. Try another photo, or type it.</p> : null}
+            {drafts.length === 0 ? <p className="text-sm text-ink-soft">{t("No food found. Try another photo, or type it.")}</p> : null}
             {drafts.map(({ key, draft }) => (
               <DraftRow
                 key={key}
@@ -194,7 +195,7 @@ export function PantryView() {
               disabled={busy !== null || !drafts.length}
               className="mt-2 rounded-full bg-orange py-3 font-bold text-card disabled:opacity-40"
             >
-              {busy === "save" ? "Adding…" : `Add ${drafts.length} to my pantry`}
+              {busy === "save" ? t("Adding…") : t("Add {n} to my pantry", { n: drafts.length })}
             </button>
           </div>
         </Sheet>
@@ -227,7 +228,7 @@ function PantrySection({
           editing === item.id ? (
             <li key={item.id} className="py-2">
               <DraftRow
-                draft={{ name: item.name, quantity: item.quantity ?? null, unit: item.unit ?? "" }}
+                draft={{ name: item.name, label: item.label ?? "", quantity: item.quantity ?? null, unit: item.unit ?? "" }}
                 onChange={(draft) => onSave(item, draft)}
                 onRemove={() => onEdit(null)}
                 saveOnly
@@ -243,13 +244,13 @@ function PantrySection({
 }
 
 function PantryRow({ item, onEdit, onRemove }: { item: PantryItem; onEdit: () => void; onRemove: () => void }) {
-  const amount = formatQuantity(item.quantity, item.unit) || "some";
+  const amount = formatQuantity(item.quantity, item.unit) || t("some");
   const useBy = useByLabel(item);
   return (
     <li className="flex items-center gap-3 py-2">
-      <button onClick={onEdit} className="min-w-0 flex-1 text-left" aria-label={`Change ${item.name}`}>
+      <button onClick={onEdit} className="min-w-0 flex-1 text-left" aria-label={t("Change {name}", { name: foodName(item) })}>
         <div className="font-medium first-letter:uppercase">
-          {item.name}
+          {foodName(item)}
           <span className="font-normal text-ink-soft"> · {amount}</span>
         </div>
         {useBy || item.note ? (
@@ -260,10 +261,10 @@ function PantryRow({ item, onEdit, onRemove }: { item: PantryItem; onEdit: () =>
           </div>
         ) : null}
       </button>
-      <button onClick={onEdit} aria-label={`Change ${item.name}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink">
+      <button onClick={onEdit} aria-label={t("Change {name}", { name: foodName(item) })} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink">
         <Pencil size={14} />
       </button>
-      <button onClick={onRemove} aria-label={`Remove ${item.name}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink">
+      <button onClick={onRemove} aria-label={t("Remove {name}", { name: foodName(item) })} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink">
         <X size={16} />
       </button>
     </li>
@@ -282,11 +283,14 @@ function DraftRow({
   onRemove: () => void;
   saveOnly?: boolean;
 }) {
-  const [name, setName] = useState(draft.name);
+  // In Portuguese the shown words are the label; the backend works out the English name.
+  const portuguese = language() !== "en";
+  const [name, setName] = useState(portuguese ? draft.label || draft.name : draft.name);
   const [quantity, setQuantity] = useState(draft.quantity == null ? "" : String(draft.quantity));
   const [unit, setUnit] = useState(draft.unit ?? "");
   const current = (): PantryDraft => ({
     name: name.trim(),
+    label: portuguese ? name.trim() : "",
     quantity: quantity.trim() === "" ? null : Number(quantity.replace(",", ".")) || null,
     unit: unit.trim(),
   });
@@ -298,26 +302,26 @@ function DraftRow({
   }, [name, quantity, unit]);
   return (
     <div className="flex items-center gap-2">
-      <input value={name} onChange={(e) => setName(e.target.value)} aria-label="Food" className="field min-w-0 flex-1" />
+      <input value={name} onChange={(e) => setName(e.target.value)} aria-label={t("Food")} className="field min-w-0 flex-1" />
       <input
         value={quantity}
         onChange={(e) => setQuantity(e.target.value)}
         inputMode="decimal"
-        placeholder="some"
-        aria-label="Amount"
+        placeholder={t("some")}
+        aria-label={t("Amount")}
         className="field w-20 text-right tabular-nums"
       />
-      <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="Unit" className="field w-20">
+      <select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label={t("Unit")} className="field w-20">
         {["", "g", "kg", "ml", "l", "pack", "can"].map((u) => (
-          <option key={u} value={u}>{u || "whole"}</option>
+          <option key={u} value={u}>{u || t("whole")}</option>
         ))}
       </select>
       {saveOnly ? (
         <button onClick={() => onChange(current())} disabled={!name.trim()} className="rounded-full bg-ink px-3 py-2 text-sm font-semibold text-paper disabled:opacity-40">
-          Save
+          {t("Save")}
         </button>
       ) : null}
-      <button onClick={onRemove} aria-label={saveOnly ? "Cancel" : `Remove ${name}`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink">
+      <button onClick={onRemove} aria-label={saveOnly ? t("Cancel") : t("Remove {name}", { name })} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-soft/70 hover:bg-card hover:text-ink">
         <X size={16} />
       </button>
     </div>

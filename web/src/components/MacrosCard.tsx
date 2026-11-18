@@ -1,12 +1,13 @@
 import { Calculator } from "lucide-react";
 import { perPortion, portionLabel } from "../lib/macros";
 import type { Macros, ReferencePortion } from "../types";
+import { t } from "../lib/i18n";
 
 const TILES = [
   { key: "kcal", label: "kcal", unit: "", dot: "bg-orange" },
-  { key: "protein", label: "Protein", unit: "g", dot: "bg-blue" },
-  { key: "carbs", label: "Carbs", unit: "g", dot: "bg-mustard" },
-  { key: "fat", label: "Fat", unit: "g", dot: "bg-green" },
+  { key: "protein", get label() { return t("Protein"); }, unit: "g", dot: "bg-blue" },
+  { key: "carbs", get label() { return t("Carbs"); }, unit: "g", dot: "bg-mustard" },
+  { key: "fat", get label() { return t("Fat"); }, unit: "g", dot: "bg-green" },
 ] as const;
 
 /** Macros for one reference portion, as set in Settings. */
@@ -26,7 +27,7 @@ export function MacrosCard({
   if (!macros) {
     return (
       <section className="flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 ring-1 ring-line">
-        <span className="text-sm text-ink-soft">{calculating ? "Working out the macros…" : "No macros yet for this recipe."}</span>
+        <span className="text-sm text-ink-soft">{calculating ? t("Working out the macros…") : t("No macros yet for this recipe.")}</span>
         {onCalculate ? (
           <button
             type="button"
@@ -34,7 +35,7 @@ export function MacrosCard({
             disabled={calculating}
             className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-ink px-3 py-1.5 text-sm font-semibold text-paper disabled:opacity-40"
           >
-            <Calculator size={16} /> Calculate macros
+            <Calculator size={16} /> {t("Calculate macros")}
           </button>
         ) : null}
       </section>
@@ -44,9 +45,9 @@ export function MacrosCard({
   const values = perPortion(macros, servings, reference);
   const missing = macros.missing ?? [];
   return (
-    <section aria-label="Macros" className="flex flex-col gap-2">
+    <section aria-label={t("Macros")} className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-lg font-bold">Macros</h2>
+        <h2 className="text-lg font-bold">{t("Macros")}</h2>
         <span className="text-sm text-ink-soft">{portionLabel(reference)}</span>
       </div>
       <dl className="grid grid-cols-4 gap-2">
@@ -64,13 +65,13 @@ export function MacrosCard({
         ))}
       </dl>
       <p className="text-xs text-ink-soft">
-        Estimated from the ingredients{reference?.kind === "grams" ? ", using their raw weight" : ""}.
-        {missing.length ? ` Not counted: ${missing.join(", ")}.` : ""}
+        {reference?.kind === "grams" ? t("Estimated from the ingredients, using their raw weight.") : t("Estimated from the ingredients.")}
+        {missing.length ? " " + t("Not counted: {foods}.", { foods: missing.join(", ") }) : ""}
         {onCalculate ? (
           <>
             {" "}
             <button type="button" onClick={onCalculate} disabled={calculating} className="font-semibold text-blue underline-offset-4 hover:underline">
-              {calculating ? "Recalculating…" : "Recalculate"}
+              {calculating ? t("Recalculating…") : t("Recalculate")}
             </button>
           </>
         ) : null}

@@ -13,6 +13,7 @@ Google Cloud.
 | You want to | The app |
 |---|---|
 | Stop planning from a blank page | Drafts next week's meals on the day and hour you choose (Friday 17:00 by default) and notifies you |
+| Use the app in Portuguese or English | One language per household, chosen in the first-use setup (it starts from the phone's language) and in Settings. Screens, recipes, the grocery list, plan notes and notifications follow it. Recipes are translated once by AI; ingredient names stay English underneath, so allergies, the pantry and packs keep matching |
 | Start without an empty app | A short first-use setup asks who eats, which meals you cook, when the plan should be ready, diets, allergies, foods you never eat, kitchen equipment and staples, then makes the first plan |
 | Stay safe with allergies | Recipes with any of the 14 EU allergens you choose, or your own, are never planned or swapped in; checked by ingredient names and once per recipe by AI. Choosing one by hand shows a warning |
 | Keep variety | Uses at most 20% of meals from the previous two weeks, preferring recipes cooked longest ago |

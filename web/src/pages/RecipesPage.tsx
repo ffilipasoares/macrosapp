@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { ErrorNote, Loading, ProteinDot, Sheet, Thumb, listButton, messageOf, primaryButton, quietButton } from "../components/ui";
 import { CATEGORIES, type Category, type Recipe, type RecipeDraft } from "../types";
+import { t, tn } from "../lib/i18n";
 
 type AddMode = "menu" | "images" | "link" | "video" | "voice" | "text";
 
@@ -42,7 +43,7 @@ export function RecipesPage() {
         if (type !== "all" && (recipe.category ?? "main") !== type) return false;
         if (label?.startsWith("protein:") && (recipe.protein ?? "other") !== label.slice(8)) return false;
         if (label?.startsWith("tag:") && !(recipe.tags ?? []).includes(label.slice(4))) return false;
-        return !q || recipe.title.toLowerCase().includes(q) || (recipe.ingredients ?? []).some((i) => i.name.includes(q));
+        return !q || recipe.title.toLowerCase().includes(q) || (recipe.ingredients ?? []).some((i) => i.name.includes(q) || (i.label ?? "").toLowerCase().includes(q));
       }),
     [recipes, type, label, q],
   );
@@ -55,27 +56,27 @@ export function RecipesPage() {
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-5 px-5 pb-6 pt-8">
           <header className="flex items-center justify-between gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">Recipes</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t("Recipes")}</h1>
             <button
               onClick={() => setAdding("menu")}
               className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-orange py-2 pl-3 pr-4 text-sm font-semibold text-card"
             >
-              <Plus size={16} strokeWidth={2.5} /> Add recipe
+              <Plus size={16} strokeWidth={2.5} /> {t("Add recipe")}
             </button>
           </header>
           <ErrorNote message={error} />
 
           {!recipes ? (
-            <Loading label="Loading recipes" />
+            <Loading label={t("Loading recipes")} />
           ) : recipes.length === 0 ? (
             <section className="flex flex-col items-center gap-3 px-4 py-12 text-center">
-              <h2 className="text-xl font-bold">Your recipe library is empty</h2>
+              <h2 className="text-xl font-bold">{t("Your recipe library is empty")}</h2>
               <p className="max-w-sm text-sm text-ink-soft">
                 Add the meals you already cook. With around 25 recipes the weekly plan can avoid repeats; until then it fills gaps with new ideas
                 from the web.
               </p>
               <button className={`mt-2 ${primaryButton}`} onClick={() => setAdding("menu")}>
-                Add your first recipe
+                {t("Add your first recipe")}
               </button>
             </section>
           ) : (
@@ -88,13 +89,13 @@ export function RecipesPage() {
                     type="search"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search by name or ingredient"
-                    aria-label="Search recipes"
+                    placeholder={t("Search by name or ingredient")}
+                    aria-label={t("Search recipes")}
                     className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-ink-soft/80"
                   />
                 </label>
-                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by type of dish">
-                  {[{ key: "all" as const, plural: "All" }, ...typesPresent].map((choice) => {
+                <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label={t("Filter by type of dish")}>
+                  {[{ key: "all" as const, plural: t("All") }, ...typesPresent].map((choice) => {
                     const on = choice.key === type;
                     return (
                       <button
@@ -111,7 +112,7 @@ export function RecipesPage() {
                   })}
                 </div>
                 {labels.length ? (
-                  <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label="Filter by protein or tag">
+                  <div className="-mx-5 flex gap-2 overflow-x-auto px-5 [scrollbar-width:none]" role="group" aria-label={t("Filter by protein or tag")}>
                     {labels.map((value) => {
                       const on = value === label;
                       return (
@@ -133,7 +134,7 @@ export function RecipesPage() {
 
               {shown.length === 0 ? (
                 <p className="py-12 text-center text-ink-soft">
-                  {q ? `No recipes match “${query}”.` : "No recipes match these filters."}
+                  {q ? t("No recipes match “{query}”.", { query }) : t("No recipes match these filters.")}
                 </p>
               ) : (
                 <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3">
@@ -160,7 +161,7 @@ function RecipeTile({ recipe }: { recipe: Recipe }) {
       <span className="relative block transition-transform duration-200 ease-out group-hover:scale-[1.02]">
         <Thumb title={recipe.title} protein={recipe.protein} image={recipe.image_url} size="tile" />
         {recipe.needs_review ? (
-          <span className="absolute left-2 top-2 rounded-full bg-mustard px-2 py-0.5 text-[11px] font-semibold text-ink">Check this</span>
+          <span className="absolute left-2 top-2 rounded-full bg-mustard px-2 py-0.5 text-[11px] font-semibold text-ink">{t("Check this")}</span>
         ) : null}
       </span>
       <span className="mt-2 line-clamp-2 font-semibold leading-snug">{recipe.title}</span>
@@ -216,7 +217,7 @@ function AddSheet({
     const picked = Array.from(list ?? []).filter((file) => file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name));
     if (!picked.length) return;
     const room = MAX_IMAGES - images.length;
-    if (picked.length > room) setError(`One recipe can use up to ${MAX_IMAGES} images.`);
+    if (picked.length > room) setError(t("One recipe can use up to {n} images.", { n: MAX_IMAGES }));
     const added = picked.slice(0, room).map((file) => ({ file, url: URL.createObjectURL(file) }));
     previewUrls.current.push(...added.map((image) => image.url));
     setImages([...images, ...added]);
@@ -227,7 +228,7 @@ function AddSheet({
     const file = list?.[0];
     if (!file) return;
     if (file.size > MAX_VIDEO_BYTES) {
-      setError(`That ${what} is larger than 20 MB. Send a shorter one.`);
+      setError(t("That {what} is larger than 20 MB. Send a shorter one.", { what: t(what) }));
       return;
     }
     setError(null);
@@ -275,18 +276,18 @@ function AddSheet({
 
   if (mode === "images") {
     return (
-      <Sheet title="Screenshots" subtitle="Add every screenshot of the recipe, in order. They are read together as one recipe." onClose={onClose}>
+      <Sheet title={t("Screenshots")} subtitle={t("Add every screenshot of the recipe, in order. They are read together as one recipe.")} onClose={onClose}>
         {hiddenInputs}
         <ErrorNote message={error} />
         <ol className="grid grid-cols-3 gap-2">
           {images.map((image, index) => (
             <li key={image.url} className="relative aspect-[3/5] overflow-hidden rounded-2xl bg-card ring-1 ring-line">
-              <img src={image.url} alt={`Screenshot ${index + 1}`} className="h-full w-full object-cover" />
+              <img src={image.url} alt={t("Screenshot {n}", { n: index + 1 })} className="h-full w-full object-cover" />
               <span className="absolute left-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full bg-ink text-xs font-bold text-paper">{index + 1}</span>
               <button
                 onClick={() => setImages(images.filter((_, i) => i !== index))}
                 disabled={busy}
-                aria-label={`Remove screenshot ${index + 1}`}
+                aria-label={t("Remove screenshot {n}", { n: index + 1 })}
                 className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-card/90 text-ink"
               >
                 <X size={14} />
@@ -301,13 +302,13 @@ function AddSheet({
                 className="flex aspect-[3/5] w-full flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-ink-soft/40 text-sm font-semibold text-ink-soft hover:bg-card"
               >
                 <ImagePlus size={22} />
-                Add more
+                {t("Add more")}
               </button>
             </li>
           ) : null}
         </ol>
         <button className={primaryButton} disabled={busy || images.length === 0} onClick={() => run(() => api.importImages(images.map((i) => i.file)), onDraft)}>
-          {busy ? `Reading ${images.length} image${images.length > 1 ? "s" : ""}…` : `Read recipe from ${images.length} image${images.length === 1 ? "" : "s"}`}
+          {busy ? tn(images.length, "Reading {n} image…", "Reading {n} images…") : tn(images.length, "Read recipe from {n} image", "Read recipe from {n} images")}
         </button>
       </Sheet>
     );
@@ -315,7 +316,7 @@ function AddSheet({
 
   if (mode === "link") {
     return (
-      <Sheet title="From a link" subtitle="Paste a link to a TikTok, a recipe website or a blog." onClose={onClose}>
+      <Sheet title={t("From a link")} subtitle={t("Paste a link to a TikTok, a recipe website or a blog.")} onClose={onClose}>
         <ErrorNote message={error} />
         <form
           className="flex flex-col gap-3"
@@ -331,16 +332,16 @@ function AddSheet({
             autoFocus
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder="https://…"
-            aria-label="Link to the recipe"
+            placeholder={t("https://…")}
+            aria-label={t("Link to the recipe")}
             className="field"
           />
           <button className={primaryButton} disabled={busy || link.trim().length < 8}>
-            {busy ? "Reading the page…" : "Get the recipe"}
+            {busy ? t("Reading the page…") : t("Get the recipe")}
           </button>
         </form>
         <ul className="flex flex-col gap-1 text-sm text-ink-soft">
-          <li>Recipe websites: the ingredients, method and photo are taken from the page.</li>
+          <li>{t("Recipe websites: the ingredients, method and photo are taken from the page.")}</li>
           <li>
             TikTok: the recipe is read from the video's caption. If it is only spoken in the video,{" "}
             <button className="font-semibold text-blue underline-offset-4 hover:underline" onClick={() => setMode("video")}>
@@ -355,7 +356,7 @@ function AddSheet({
 
   if (mode === "video") {
     return (
-      <Sheet title="From a video" subtitle="A cooking video you saved, for example from TikTok (Share, then Save video)." onClose={onClose}>
+      <Sheet title={t("From a video")} subtitle={t("A cooking video you saved, for example from TikTok (Share, then Save video).")} onClose={onClose}>
         {hiddenInputs}
         <ErrorNote message={error} />
         {video ? (
@@ -368,7 +369,7 @@ function AddSheet({
                 <span className="block truncate font-semibold">{video.name}</span>
                 <span className="block text-sm text-ink-soft">{(video.size / 1024 / 1024).toFixed(1)} MB</span>
               </span>
-              <button onClick={() => setVideo(null)} disabled={busy} aria-label="Remove video" className="grid h-8 w-8 place-items-center rounded-full text-ink-soft hover:bg-paper">
+              <button onClick={() => setVideo(null)} disabled={busy} aria-label={t("Remove video")} className="grid h-8 w-8 place-items-center rounded-full text-ink-soft hover:bg-paper">
                 <X size={16} />
               </button>
             </div>
@@ -377,16 +378,16 @@ function AddSheet({
               rows={3}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="Caption (optional): paste the video's description if it lists ingredients"
+              placeholder={t("Caption (optional): paste the video's description if it lists ingredients")}
               className="field resize-y"
             />
             <button className={primaryButton} disabled={busy} onClick={() => run(() => api.importVideo(video, caption), onDraft)}>
-              {busy ? "Watching the video… this can take a minute" : "Read recipe from video"}
+              {busy ? t("Watching the video… this can take a minute") : t("Read recipe from video")}
             </button>
           </div>
         ) : (
           <button onClick={() => videoInput.current?.click()} disabled={busy} className={quietButton}>
-            <Clapperboard size={18} /> Choose a video (up to 20 MB)
+            <Clapperboard size={18} /> {t("Choose a video (up to 20 MB)")}
           </button>
         )}
       </Sheet>
@@ -395,19 +396,19 @@ function AddSheet({
 
   if (mode === "voice") {
     return (
-      <Sheet title="Say it" subtitle="Tell the recipe out loud, in English or Portuguese." onClose={onClose}>
+      <Sheet title={t("Say it")} subtitle={t("Tell the recipe out loud, in English or Portuguese.")} onClose={onClose}>
         {hiddenInputs}
         <ErrorNote message={error} />
         <VoiceRecorder onRecorded={setVoice} disabled={busy} />
         <p className="text-sm text-ink-soft">
-          Say the name, how many it serves, each ingredient with its amount, then the steps. Pauses and corrections are fine.
+          {t("Say the name, how many it serves, each ingredient with its amount, then the steps. Pauses and corrections are fine.")}
         </p>
         {voice && !voice.name.startsWith("voice-recipe") ? <p className="text-sm font-medium">Voice memo: {voice.name}</p> : null}
         <button className={primaryButton} disabled={busy || !voice} onClick={() => voice && run(() => api.importAudio(voice), onDraft)}>
-          {busy ? "Listening… this can take a moment" : "Create recipe"}
+          {busy ? t("Listening… this can take a moment") : t("Create recipe")}
         </button>
         <button onClick={() => audioInput.current?.click()} disabled={busy} className="text-sm font-semibold text-blue underline-offset-4 hover:underline">
-          Or choose a voice memo
+          {t("Or choose a voice memo")}
         </button>
       </Sheet>
     );
@@ -415,34 +416,34 @@ function AddSheet({
 
   if (mode === "text") {
     return (
-      <Sheet title="Paste a recipe" subtitle="Any language. It is translated to English." onClose={onClose}>
+      <Sheet title={t("Paste a recipe")} subtitle={t("Any language. It is translated for you.")} onClose={onClose}>
         <ErrorNote message={error} />
         <textarea
           id="paste-text"
           rows={9}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Bacalhau à Brás: 400 g bacalhau, 500 g batata palha…"
+          placeholder={t("Bacalhau à Brás: 400 g bacalhau, 500 g batata palha…")}
           className="field resize-y"
         />
         <button className={primaryButton} disabled={busy || text.trim().length < 10} onClick={() => run(() => api.importText(text), onDraft)}>
-          {busy ? "Reading…" : "Read recipe"}
+          {busy ? t("Reading…") : t("Read recipe")}
         </button>
       </Sheet>
     );
   }
 
   const ways = [
-    { Icon: Link2, title: "From a link", body: "TikTok, a recipe website or a blog", tint: "bg-blue-soft", onClick: () => setMode("link") },
-    { Icon: Camera, title: "Screenshots or photos", body: "One or several, read and translated for you", tint: "bg-mustard-soft", onClick: () => imageInput.current?.click() },
-    { Icon: Mic, title: "Say it", body: "Talk through the recipe and it is written down", tint: "bg-orange-soft", onClick: () => setMode("voice") },
-    { Icon: Clapperboard, title: "From a video", body: "A cooking video you saved", tint: "bg-pink-soft", onClick: () => setMode("video") },
-    { Icon: ClipboardPaste, title: "Paste text", body: "From a message or a note", tint: "bg-periwinkle-soft", onClick: () => setMode("text") },
-    { Icon: PenLine, title: "Type it in", body: "Write it yourself", tint: "bg-green-soft", onClick: () => navigate("/recipes/new") },
+    { Icon: Link2, title: t("From a link"), body: t("TikTok, a recipe website or a blog"), tint: "bg-blue-soft", onClick: () => setMode("link") },
+    { Icon: Camera, title: t("Screenshots or photos"), body: t("One or several, read and translated for you"), tint: "bg-mustard-soft", onClick: () => imageInput.current?.click() },
+    { Icon: Mic, title: t("Say it"), body: t("Talk through the recipe and it is written down"), tint: "bg-orange-soft", onClick: () => setMode("voice") },
+    { Icon: Clapperboard, title: t("From a video"), body: t("A cooking video you saved"), tint: "bg-pink-soft", onClick: () => setMode("video") },
+    { Icon: ClipboardPaste, title: t("Paste text"), body: t("From a message or a note"), tint: "bg-periwinkle-soft", onClick: () => setMode("text") },
+    { Icon: PenLine, title: t("Type it in"), body: t("Write it yourself"), tint: "bg-green-soft", onClick: () => navigate("/recipes/new") },
   ];
 
   return (
-    <Sheet title="Add a recipe" subtitle="You can check and edit it before anything is saved." onClose={onClose}>
+    <Sheet title={t("Add a recipe")} subtitle={t("You can check and edit it before anything is saved.")} onClose={onClose}>
       {hiddenInputs}
       <ErrorNote message={error} />
       <ul className="flex flex-col">
