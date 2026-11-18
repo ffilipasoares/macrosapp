@@ -1,5 +1,5 @@
 import { signOut } from "firebase/auth";
-import { Bell, Check, Copy, LogOut, X } from "lucide-react";
+import { Bell, Check, LogOut, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
@@ -25,7 +25,6 @@ export function SettingsPage() {
   const [newRule, setNewRule] = useState<Rule>({ kind: "min", count: 2, tag: "chicken" });
   const [staple, setStaple] = useState("");
   const [push, setPush] = useState<PushState | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
   const [dietDraft, setDietDraft] = useState("");
   const [savedDiets, setSavedDiets] = useState<string[]>([]);
   const [dietsChanged, setDietsChanged] = useState(false);
@@ -93,28 +92,11 @@ export function SettingsPage() {
     }
   }
 
-  async function copy(label: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(label);
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      setCopied(null);
-    }
-  }
-
   function addRule() {
     const tag = newRule.tag.trim().toLowerCase();
     if (!tag) return;
     change({ rules: [...rules.filter((r) => !(r.kind === newRule.kind && r.tag === tag)), { ...newRule, tag }] });
   }
-
-  const apiBase = `${window.location.origin}/api/shortcuts`;
-  const keys = [
-    { id: "grocery", label: t("Add to groceries"), value: `${apiBase}/grocery` },
-    { id: "image", label: t("Save a recipe screenshot"), value: `${apiBase}/recipe-image` },
-    { id: "key", label: t("Your key (keep it private)"), value: me.shortcut_token },
-  ];
 
   return (
     <>
@@ -387,22 +369,6 @@ export function SettingsPage() {
             )}
             {push === "denied" && <p className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm">{t("Notifications are blocked for this app in your phone's settings.")}</p>}
             {push === "unavailable" && <p className="rounded-2xl bg-card px-4 py-3 text-sm ring-1 ring-line">{t("Notifications are not set up on this device.")}</p>}
-          </Section>
-
-          <Section title={t("Siri and the share sheet")} note={t("Two Apple Shortcuts send to these addresses with your key. Step-by-step instructions are in docs/shortcuts.md in the project.")}>
-            <dl className="flex flex-col gap-3">
-              {keys.map(({ id, label, value }) => (
-                <div key={id} className="rounded-2xl bg-card p-3 ring-1 ring-line">
-                  <dt className="flex items-center justify-between gap-3 text-sm font-semibold">
-                    {label}
-                    <button className="flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-blue hover:bg-blue-soft" onClick={() => copy(id, value)}>
-                      <Copy size={14} /> {copied === id ? t("Copied") : t("Copy")}
-                    </button>
-                  </dt>
-                  <dd className="mt-1 break-all font-mono text-xs text-ink-soft">{value}</dd>
-                </div>
-              ))}
-            </dl>
           </Section>
 
           <Section title={t("What the app learned")} note={t("From your ♥, “Not for us”, swaps and the meals you choose. Plans use it to decide between recipes that fit your rules.")}>

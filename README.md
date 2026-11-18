@@ -84,8 +84,6 @@ and "At home", your pantry.
 - *When the plan is ready*: the day and hour next week's plan is made.
 - *Allergies*, *Foods you never eat*, *Kitchen equipment*: kept out of plans.
 - *Plan-ready notification*: turn on push notifications for this phone.
-- *Siri and the share sheet*: the addresses and private key for the two Apple
-  Shortcuts (see [docs/shortcuts.md](docs/shortcuts.md)).
 - *Account*: sign out.
 
 ## How it is built
