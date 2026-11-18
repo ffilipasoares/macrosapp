@@ -100,3 +100,82 @@ class FakeRecipeAI:
             )
             for index in range(count * 2)
         ]
+
+
+class SampleRecipeAI(FakeRecipeAI):
+    """The fake for running the app locally: it also writes sample dinners, so an empty
+    library still gets a full week (the fake's web pages cannot really be opened)."""
+
+    def generate_fallback_recipes(
+        self,
+        needs: dict[str, int],
+        total_slots: int,
+        forbidden_tags: list[str],
+        avoid_titles: list[str],
+        diet: str = "",
+    ) -> list[RecipeDraft]:
+        """Sample dinners, so a local week fills up without a real AI or web search."""
+        self.calls.append(("fallback", (dict(needs), total_slots, diet)))
+        count = max(total_slots, sum(needs.values()))
+        wanted = [tag for tag, n in needs.items() for _ in range(n)]
+        pool = [
+            dish
+            for dish in _DINNERS
+            if dish[1] not in forbidden_tags and not set(dish[3]) & set(forbidden_tags)
+        ]
+        # Dishes that cover a need first, then the rest, in order.
+        pool.sort(key=lambda dish: not any(_covers(dish, tag) for tag in wanted))
+        drafts = []
+        for index in range(count):
+            if not pool:
+                break
+            title, protein, ingredients, tags = pool[index % len(pool)]
+            round_ = index // len(pool)
+            name = title if round_ == 0 else f"{title} ({round_ + 1})"
+            if name in avoid_titles:
+                continue
+            drafts.append(
+                RecipeDraft(
+                    title=name,
+                    servings=2,
+                    ingredients=[Ingredient(name=n, quantity=q, unit=u) for n, q, u in ingredients],
+                    steps=["Prepare the ingredients.", "Cook until done.", "Serve."],
+                    protein=protein,
+                    tags=list(tags),
+                    prep_minutes=30,
+                )
+            )
+        return drafts
+
+
+def _covers(dish: tuple, tag: str) -> bool:
+    title, protein, ingredients, tags = dish
+    words = {protein, *tags, *(n for n, _, _ in ingredients)}
+    return tag in words or (tag == "fish" and protein == "seafood")
+
+
+# Title, protein, ingredients (name, quantity, unit), tags.
+_DINNERS: list[tuple[str, str, list[tuple[str, float, str]], tuple[str, ...]]] = [
+    ("Baked salmon with broccoli", "fish",
+     [("salmon fillet", 2, ""), ("broccoli", 300, "g"), ("lemon", 1, "")], ("vegetables",)),
+    ("Lentil and carrot stew", "vegetarian",
+     [("red lentils", 200, "g"), ("carrot", 2, ""), ("tomato", 400, "g")],
+     ("legumes", "vegetables")),
+    ("Chicken and pepper stir fry", "chicken",
+     [("chicken breast", 300, "g"), ("pepper", 2, ""), ("rice", 150, "g")], ("vegetables",)),
+    ("Cod with tomato and spinach", "fish",
+     [("cod fillet", 2, ""), ("tomato", 3, ""), ("spinach", 200, "g")], ("vegetables",)),
+    ("Chickpea and spinach curry", "vegan",
+     [("chickpeas", 400, "g"), ("spinach", 200, "g"), ("coconut milk", 200, "ml")],
+     ("legumes", "vegetables")),
+    ("Turkey meatballs with courgette", "turkey",
+     [("turkey mince", 400, "g"), ("courgette", 2, ""), ("tomato", 400, "g")],
+     ("vegetables",)),
+    ("Prawn and vegetable noodles", "seafood",
+     [("prawns", 250, "g"), ("noodles", 150, "g"), ("cabbage", 200, "g")], ("vegetables",)),
+    ("Beef and bean chilli", "beef",
+     [("beef mince", 400, "g"), ("kidney beans", 400, "g"), ("pepper", 1, "")],
+     ("vegetables",)),
+    ("Vegetable omelette", "egg",
+     [("eggs", 4, ""), ("mushroom", 150, "g"), ("spinach", 100, "g")], ("vegetables",)),
+]  # fmt: skip

@@ -36,9 +36,9 @@ def _default_ai(config: Config) -> RecipeAI | None:
 
         return GeminiRecipeAI(config.project_id, config.gemini_location, config.gemini_model)
     if config.ai_provider == "fake":
-        from app.ai.fake import FakeRecipeAI
+        from app.ai.fake import SampleRecipeAI
 
-        return FakeRecipeAI()
+        return SampleRecipeAI()
     return None
 
 

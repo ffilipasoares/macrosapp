@@ -155,8 +155,8 @@ def test_allergies_avoided_foods_and_missing_equipment_stay_out_of_the_plan():
     assert warnings["Mushroom risotto"] == ["contains mushroom"]
     assert warnings["Air fryer wings"] == ["needs an air fryer"]
     # And listed after the ones without a warning.
-    order = [o["recipe"]["title"] for o in options]
-    assert order.index("Cheese toastie") > order.index("Baked cod") or "Baked cod" not in order
+    flagged = [bool(o["warnings"]) for o in options]
+    assert flagged == sorted(flagged)
 
 
 def test_settings_tidy_allergies_and_reject_unknown_equipment():
@@ -181,3 +181,38 @@ def test_new_households_go_through_setup_once():
 def test_households_from_before_the_setup_are_treated_as_set_up():
     stored = {"members": ["ana"], "owner_email": "a@example.com", "shortcut_token": "x"}
     assert Household(**stored).setup_done is True
+
+
+def _app(ai):
+    from app.links import LinkError
+
+    def unreachable(url):
+        raise LinkError("The link could not be opened.")
+
+    return TestClient(
+        create_app(
+            config=Config(push_enabled=False),
+            repo=MemoryRepo(),
+            ai=ai,
+            notifier=LogNotifier(),
+            verify_token=lambda t: {"uid": t, "email": "a@example.com", "email_verified": True},
+            read_link=unreachable,
+        )
+    )
+
+
+def test_running_locally_an_empty_library_still_gets_a_full_balanced_week():
+    from app.ai.fake import SampleRecipeAI
+
+    client = _app(SampleRecipeAI())
+    plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
+    assert len(plan["meals"]) == len(plan["meals"]) + len(plan["open_slots"]) > 0
+    assert not plan["open_slots"] and not plan["notes"]
+    proteins = [m["recipe"]["protein"] for m in plan["meals"].values()]
+    assert proteins.count("fish") >= 2 and proteins.count("beef") <= 2
+
+
+def test_an_empty_library_says_so():
+    client = _app(FakeRecipeAI())
+    plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
+    assert any("your recipe library is empty" in note for note in plan["notes"])

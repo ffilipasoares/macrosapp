@@ -356,10 +356,17 @@ def generate_plan(
     total = len(slots) + len(kept)
     filled = len(picks) + len(kept)
     if filled < total:
-        notes.append(
-            f"Only {filled} of {total} meals could be filled without breaking your "
-            "rules. Add more recipes to your library."
-        )
+        if not library:
+            notes.append(
+                f"Only {filled} of {total} meals could be filled: your recipe library is empty "
+                "and the web search did not find enough. Add a few recipes, or try again."
+            )
+        else:
+            notes.append(
+                f"Only {filled} of {total} meals could be filled with recipes that fit your "
+                "diets, allergies and rules. Add more recipes, or choose the empty meals "
+                "yourself."
+            )
 
     meals = dict(kept)
     for slot, recipe in zip(slots, picks, strict=False):
