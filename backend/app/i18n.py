@@ -72,6 +72,9 @@ _MESSAGES: dict[str, dict[str, str]] = {
         "en": "The plan could not be made this time. Try again in a minute.",
         "pt": "Não foi possível fazer o plano desta vez. Tenta de novo daqui a um minuto.",
     },
+    "reason_liked": {"en": "You ♥ this", "pt": "Marcaste com ♥"},
+    "reason_often": {"en": "You often choose {what}", "pt": "Escolhes muitas vezes {what}"},
+    "reason_new": {"en": "Something new", "pt": "Algo novo"},
     "approve_again": {
         "en": "Approve the plan again to update your grocery list.",
         "pt": "Aprova o plano de novo para atualizar a lista de compras.",

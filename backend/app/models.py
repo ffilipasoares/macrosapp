@@ -166,6 +166,9 @@ class Recipe(RecipeDraft):
     needs_review: bool = False
     # Whether the recipe fits each diet it was checked against, e.g. {"mediterranean": true}.
     diet_fit: dict[str, bool] = Field(default_factory=dict)
+    # The household's own say: ♥ for more of it, "Not for us" for never suggesting it.
+    liked: bool = False
+    not_for_us: bool = False
 
 
 class SlotSetting(BaseModel):
@@ -224,6 +227,14 @@ class Settings(BaseModel):
     avoid: list[str] = Field(default_factory=list, max_length=30)
     # The big kitchen equipment there is. None: not asked, so nothing is ruled out.
     equipment: list[Equipment] | None = None
+    # Longest a recipe may take, in minutes, on weekdays and at weekends. None: no limit.
+    cook_minutes_weekday: int | None = Field(default=None, ge=5, le=480)
+    cook_minutes_weekend: int | None = Field(default=None, ge=5, le=480)
+
+    def cook_limit(self, slot: str) -> int | None:
+        """The time limit for the day of a meal slot, e.g. "sat_dinner"."""
+        weekend = slot.split("_")[0] in ("sat", "sun")
+        return self.cook_minutes_weekend if weekend else self.cook_minutes_weekday
 
     @model_validator(mode="before")
     @classmethod
@@ -275,6 +286,8 @@ class PlanMeal(BaseModel):
     carried_from: str | None = None
     # Pantry food this meal uses (filled in when the plan is shown).
     uses_pantry: list[str] = Field(default_factory=list)
+    # Why the app chose it, in plain words (filled in when the plan is shown).
+    reasons: list[str] = Field(default_factory=list)
 
 
 class WeekPlan(BaseModel):
@@ -334,6 +347,7 @@ class Alternative(BaseModel):
     keeps_rules: bool
     already_planned: bool = False
     last_week: bool = False  # cooked last week: still selectable, never picked for you
+    not_for_us: bool = False  # marked "Not for us": still selectable, never suggested
     fits_diets: bool = True
     # E.g. "contains milk", "needs an air fryer". Still selectable, shown as a warning.
     warnings: list[str] = Field(default_factory=list)
@@ -403,3 +417,15 @@ class Household(BaseModel):
     # New households go through the first-use setup. Households saved before the setup
     # existed have no such field and are treated as set up.
     setup_done: bool = True
+
+
+class TasteProfile(BaseModel):
+    """What a household likes, learned from what it does. Scores fade with time.
+
+    ``scores`` maps a key ("recipe:<id>", "protein:fish", "tag:quick") to its score and
+    the day it was last changed; ``blocked`` holds titles of suggested ideas marked
+    "Not for us" that are not in the library.
+    """
+
+    scores: dict[str, tuple[float, date]] = Field(default_factory=dict)
+    blocked: list[str] = Field(default_factory=list)

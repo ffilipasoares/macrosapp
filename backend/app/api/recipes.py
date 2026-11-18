@@ -197,6 +197,20 @@ def recalculate_macros(
         raise HTTPException(404, str(error)) from error
 
 
+class Feedback(BaseModel):
+    liked: bool | None = None
+    not_for_us: bool | None = None
+
+
+@router.post("/{recipe_id}/feedback")
+def feedback(recipe_id: str, body: Feedback, household: CurrentHousehold, repo: RepoDep) -> Recipe:
+    """♥ a recipe (or take it back), or mark it "Not for us"."""
+    try:
+        return services.set_feedback(repo, household.id, recipe_id, body.liked, body.not_for_us)
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+
+
 @router.delete("/{recipe_id}", status_code=204)
 def delete_recipe(recipe_id: str, household: CurrentHousehold, repo: RepoDep) -> None:
     repo.delete_recipe(household.id, recipe_id)

@@ -43,6 +43,52 @@ class Recent:
     two_weeks_ago: frozenset[str] = frozenset()
 
 
+EXPLORE_EVERY = 5
+
+
+def _minutes(recipe: Recipe) -> int:
+    return recipe.prep_minutes or 0  # unknown: fits any day
+
+
+def _limit(limit: int | None) -> float:
+    return float("inf") if limit is None else float(limit)
+
+
+def fits_times(recipes: list[Recipe], limits: list[int | None]) -> bool:
+    """Whether each recipe can have its own meal within that meal's time limit.
+
+    Longest recipe to the most generous meal, and so on down: if that fails, nothing does.
+    """
+    if len(recipes) > len(limits):
+        return False
+    times = sorted((_minutes(r) for r in recipes), reverse=True)
+    room = sorted((_limit(limit) for limit in limits), reverse=True)
+    return all(time <= space for time, space in zip(times, room, strict=False))
+
+
+def assign_slots(
+    recipes: list[Recipe], slots: list[str], limits: list[int | None], rng: random.Random
+) -> dict[str, Recipe]:
+    """Put each recipe on a meal it fits, at random among the ways that keep all fitting."""
+    left = list(recipes)
+    rng.shuffle(left)
+    # Tightest meals first, so quick recipes are not used up on relaxed days; otherwise in
+    # day order, so a short week fills the first days.
+    order = sorted(range(len(slots)), key=lambda i: (_limit(limits[i]), i))
+    placed: dict[str, Recipe] = {}
+    free = [i for i in order]
+    for i in order:
+        free.remove(i)
+        for recipe in left:
+            if _minutes(recipe) <= _limit(limits[i]) and fits_times(
+                [r for r in left if r is not recipe], [limits[j] for j in free]
+            ):
+                placed[slots[i]] = recipe
+                left.remove(recipe)
+                break
+    return placed
+
+
 def max_repeats(slot_count: int, share: float = TWO_WEEKS_AGO_SHARE) -> int:
     """How many meals may come from two weeks ago, e.g. 5 meals at 50% gives 2."""
     return int(slot_count * share + 1e-9)
@@ -59,6 +105,7 @@ def pick_recipes(
     recent: Recent,
     rng: random.Random,
     prefer: dict[str, float] | None = None,
+    limits: list[int | None] | None = None,
 ) -> list[Recipe]:
     """Choose up to ``slot_count`` different recipes.
 
@@ -68,8 +115,14 @@ def pick_recipes(
     (``prefer``: a score per recipe id) and fresh food already bought for another
     meal this week, then recipes that were cooked longest ago.
     Returns fewer than ``slot_count`` recipes when the library is too small.
+
+    ``prefer`` adds up the household's taste and the food at home; one pick in
+    EXPLORE_EVERY ignores it, so something new or long forgotten still turns up.
+    ``limits`` are the cooking-time limits of the meals (minutes, None for none):
+    the chosen recipes must fit them, one recipe per meal.
     """
     prefer = prefer or {}
+    limits = limits if limits is not None else [None] * slot_count
     recent_ids = recent.two_weeks_ago
     recipes = [recipe for recipe in recipes if recipe.id not in recent.last_week]
     repeat_budget = max_repeats(slot_count)
@@ -89,7 +142,7 @@ def pick_recipes(
     chosen_ids: set[str] = set()
 
     def can_add(recipe: Recipe) -> bool:
-        if recipe.id in chosen_ids:
+        if recipe.id in chosen_ids or not fits_times([*chosen, recipe], limits):
             return False
         repeats_used = sum(1 for r in chosen if r.id in recent_ids)
         if recipe.id in recent_ids and repeats_used >= repeat_budget:
@@ -118,10 +171,23 @@ def pick_recipes(
         options = [recipe for recipe in rest if can_add(recipe)]
         if not options:
             break
-        best = options[0]
-        rank = (best.id in recent_ids, -prefer.get(best.id, 0.0))
-        same_rank = [r for r in options if (r.id in recent_ids, -prefer.get(r.id, 0.0)) == rank]
-        pick = max(same_rank, key=lambda r: _shared_fresh(r, chosen))  # first wins a tie
+        if prefer and (len(chosen) + 1) % EXPLORE_EVERY == 0:
+            # Something new: ignore taste and food at home, take the least cooked lately.
+            pick = min(
+                options,
+                key=lambda r: (
+                    r.id in recent_ids,
+                    prefer.get(r.id, 0.0) > 0,
+                    r.last_planned_week or "",
+                ),
+            )
+        else:
+
+            def rank(r: Recipe) -> tuple[bool, float]:
+                return (r.id in recent_ids, -round(prefer.get(r.id, 0.0) * 2) / 2)
+
+            same_rank = [r for r in options if rank(r) == rank(options[0])]
+            pick = max(same_rank, key=lambda r: _shared_fresh(r, chosen))  # first wins a tie
         rest.remove(pick)
         add(pick)
 

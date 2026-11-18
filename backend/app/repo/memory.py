@@ -3,7 +3,15 @@
 import secrets
 from collections import defaultdict
 
-from app.models import GroceryItem, Household, PantryItem, Recipe, Settings, WeekPlan
+from app.models import (
+    GroceryItem,
+    Household,
+    PantryItem,
+    Recipe,
+    Settings,
+    TasteProfile,
+    WeekPlan,
+)
 
 
 class MemoryRepo:
@@ -12,6 +20,7 @@ class MemoryRepo:
         self.user_household: dict[str, str] = {}
         self.settings: dict[str, Settings] = {}
         self.pantry: dict[str, list[PantryItem]] = {}
+        self.taste: dict[str, TasteProfile] = {}
         self.recipes: dict[str, dict[str, Recipe]] = defaultdict(dict)
         self.plans: dict[str, dict[str, WeekPlan]] = defaultdict(dict)
         self.groceries: dict[str, dict[str, GroceryItem]] = defaultdict(dict)
@@ -64,6 +73,12 @@ class MemoryRepo:
 
     def save_pantry(self, household_id: str, items: list[PantryItem]) -> None:
         self.pantry[household_id] = [item.model_copy(deep=True) for item in items]
+
+    def get_taste(self, household_id: str) -> TasteProfile:
+        return self.taste.get(household_id, TasteProfile()).model_copy(deep=True)
+
+    def save_taste(self, household_id: str, taste: TasteProfile) -> None:
+        self.taste[household_id] = taste.model_copy(deep=True)
 
     def list_recipes(self, household_id: str) -> list[Recipe]:
         return [r.model_copy(deep=True) for r in self.recipes[household_id].values()]

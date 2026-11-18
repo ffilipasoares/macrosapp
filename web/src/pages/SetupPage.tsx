@@ -2,7 +2,7 @@ import { ChevronLeft } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { AllergyFields, AvoidFields, Chip, DietFields, EquipmentFields, PlanDayFields, WordList } from "../components/ProfileFields";
+import { AllergyFields, AvoidFields, Chip, CookTimeFields, DietFields, EquipmentFields, PlanDayFields, WordList } from "../components/ProfileFields";
 import { ErrorNote, Loading, Stepper, messageOf, primaryButton } from "../components/ui";
 import { DAYS, MEALS, defaultWeekId } from "../lib/weeks";
 import { useSession } from "../session";
@@ -140,6 +140,11 @@ export function SetupPage() {
       body: <PlanDayFields settings={settings} change={change} />,
     },
     {
+      title: t("How long do you like to cook?"),
+      note: t("The longest a recipe should take. Weekend dinners can take longer, if you like."),
+      body: <CookTimeFields settings={settings} change={change} />,
+    },
+    {
       title: t("Do you follow a diet?"),
       note: t("Choose any, or none. Every plan already aims for a balanced week."),
       body: <DietFields settings={settings} change={change} />,
@@ -202,7 +207,7 @@ export function SetupPage() {
   const current = steps[step];
   // Equipment counts as answered once its screen has been passed, even with nothing chosen.
   const next = () => {
-    if (step === 7 && settings.equipment == null) change({ equipment: [] });
+    if (step === 8 && settings.equipment == null) change({ equipment: [] });
     setStep(step + 1);
   };
 

@@ -60,6 +60,24 @@ def save_settings(settings: Settings, household: CurrentHousehold, repo: RepoDep
     return settings
 
 
+class Taste(BaseModel):
+    """What the app has learned, as traits such as "protein:fish" or "tag:quick"."""
+
+    likes: list[str]
+    dislikes: list[str]
+
+
+@router.get("/taste")
+def taste(household: CurrentHousehold, repo: RepoDep) -> Taste:
+    return Taste(**services.taste_summary(repo, household.id))
+
+
+@router.delete("/taste", status_code=204)
+def forget_taste(household: CurrentHousehold, repo: RepoDep) -> None:
+    """Start learning again from nothing. ♥ and "Not for us" on recipes stay."""
+    services.reset_taste(repo, household.id)
+
+
 @router.get("/groceries")
 def list_groceries(household: CurrentHousehold, repo: RepoDep) -> list[GroceryItem]:
     return sorted(repo.list_groceries(household.id), key=lambda item: (item.aisle, item.name))

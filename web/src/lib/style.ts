@@ -50,3 +50,9 @@ export function lastCookedLabel(weekId: string | null | undefined, today = new D
   if (weeks === 1) return t("last week");
   return t("{n} weeks ago", { n: weeks });
 }
+
+/** A learned trait in words: "protein:fish" → "Fish", "tag:quick" → "quick". */
+export function traitLabel(key: string): string {
+  const [kind, value] = key.split(":", 2);
+  return kind === "protein" ? proteinStyle(value).label : t(value);
+}

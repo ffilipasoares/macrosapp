@@ -134,6 +134,15 @@ export const api = {
   /** Shopping done: everything in the basket moves into the pantry. */
   putAway: () => request<{ moved: number }>("/pantry/put-away", { method: "POST" }),
 
+  /** ♥ a recipe (or take it back), or mark it "Not for us". */
+  recipeFeedback: (id: string, feedback: { liked?: boolean; not_for_us?: boolean }) =>
+    request<Recipe>(`/recipes/${id}/feedback`, json("POST", feedback)),
+  /** Never suggest this planned meal again, and swap it now. */
+  notForUsMeal: (weekId: string, slot: string) => request<Plan>(`/plans/${weekId}/meals/${slot}/not-for-us`, { method: "POST" }),
+  /** What the app has learned: traits such as "protein:fish" or "tag:quick". */
+  getTaste: () => request<{ likes: string[]; dislikes: string[] }>("/taste"),
+  resetTaste: () => request<void>("/taste", { method: "DELETE" }),
+
   /** Swap a meal in one tap for another recipe that keeps the rules. */
   swapMeal: (weekId: string, slot: string) => request<Plan>(`/plans/${weekId}/meals/${slot}/swap`, { method: "POST" }),
   alternatives: (weekId: string, slot: string) =>

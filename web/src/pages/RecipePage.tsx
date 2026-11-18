@@ -2,6 +2,7 @@ import { ArrowLeft, Camera, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api";
+import { Feedback } from "../components/Feedback";
 import { MacrosCard } from "../components/MacrosCard";
 import { ErrorNote, Loading, Thumb, messageOf, primaryButton, quietButton } from "../components/ui";
 import { deleteRecipePhoto, uploadRecipePhoto } from "../lib/photos";
@@ -18,6 +19,14 @@ export function RecipePage() {
   const [error, setError] = useState<string | null>(null);
   const [reference, setReference] = useState<ReferencePortion | undefined>(undefined);
   const [calculating, setCalculating] = useState(false);
+
+  async function sendFeedback(feedback: { liked?: boolean; not_for_us?: boolean }) {
+    try {
+      setRecipe(await api.recipeFeedback(id!, feedback));
+    } catch (e) {
+      setError(messageOf(e));
+    }
+  }
 
   useEffect(() => {
     api.getRecipe(id!).then(setRecipe).catch((e) => setError(messageOf(e)));
@@ -78,7 +87,7 @@ export function RecipePage() {
               </span>
             ) : null}
             <span className="text-ink-soft">
-              Serves {recipe.servings}
+              {t("Serves {n}", { n: recipe.servings ?? 2 })}
               {recipe.prep_minutes ? ` · ${recipe.prep_minutes} min` : ""} · {lastCookedLabel(recipe.last_planned_week)}
             </span>
             {(recipe.tags ?? []).map((tag) => (
@@ -86,6 +95,17 @@ export function RecipePage() {
                 {tag}
               </span>
             ))}
+          </div>
+          <div className="mt-4">
+            <Feedback
+              liked={!!recipe.liked}
+              notForUs={!!recipe.not_for_us}
+              onLike={() => void sendFeedback({ liked: !recipe.liked })}
+              onNotForUs={() => void sendFeedback({ not_for_us: !recipe.not_for_us })}
+            />
+            {recipe.not_for_us ? (
+              <p className="mt-2 text-xs text-ink-soft">{t("Never suggested in plans. You can still choose it yourself.")}</p>
+            ) : null}
           </div>
         </header>
 

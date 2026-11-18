@@ -3,10 +3,10 @@ import { Bell, Check, Copy, LogOut, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import { AllergyFields, AvoidFields, Chip, DIETS, EquipmentFields, PlanDayFields } from "../components/ProfileFields";
+import { AllergyFields, AvoidFields, Chip, CookTimeFields, DIETS, EquipmentFields, PlanDayFields } from "../components/ProfileFields";
 import { ErrorNote, Loading, Stepper, messageOf, quietButton } from "../components/ui";
 import { auth } from "../firebase";
-import { DAY_COLORS, proteinStyle } from "../lib/style";
+import { DAY_COLORS, proteinStyle, traitLabel } from "../lib/style";
 import { DAYS, MEALS, defaultWeekId } from "../lib/weeks";
 import { enablePush, pushState, type PushState } from "../push";
 import { useMe } from "../session";
@@ -29,6 +29,7 @@ export function SettingsPage() {
   const [dietDraft, setDietDraft] = useState("");
   const [savedDiets, setSavedDiets] = useState<string[]>([]);
   const [dietsChanged, setDietsChanged] = useState(false);
+  const [taste, setTaste] = useState<{ likes: string[]; dislikes: string[] } | null>(null);
 
   useEffect(() => {
     api
@@ -39,6 +40,7 @@ export function SettingsPage() {
       })
       .catch((e) => setError(messageOf(e)));
     void pushState().then(setPush);
+    api.getTaste().then(setTaste).catch(() => setTaste(null));
   }, []);
 
   if (!settings) {
@@ -157,6 +159,10 @@ export function SettingsPage() {
 
           <Section title={t("When the plan is ready")} note={t("Next week's plan is made at this time, in your time zone, and you get a notification.")}>
             <PlanDayFields settings={settings} change={change} />
+          </Section>
+
+          <Section title={t("Time to cook")} note={t("The longest a recipe may take. Plans only use recipes that fit the day; you can still choose any recipe yourself.")}>
+            <CookTimeFields settings={settings} change={change} />
           </Section>
 
           <Section
@@ -397,6 +403,36 @@ export function SettingsPage() {
                 </div>
               ))}
             </dl>
+          </Section>
+
+          <Section title={t("What the app learned")} note={t("From your ♥, “Not for us”, swaps and the meals you choose. Plans use it to decide between recipes that fit your rules.")}>
+            {taste && (taste.likes.length || taste.dislikes.length) ? (
+              <div className="flex flex-col gap-2 text-sm">
+                {taste.likes.length ? (
+                  <p>
+                    <span className="font-semibold">{t("More of:")}</span> {taste.likes.map(traitLabel).join(", ")}
+                  </p>
+                ) : null}
+                {taste.dislikes.length ? (
+                  <p>
+                    <span className="font-semibold">{t("Less of:")}</span> {taste.dislikes.map(traitLabel).join(", ")}
+                  </p>
+                ) : null}
+                <button
+                  className={`self-start ${quietButton}`}
+                  onClick={() =>
+                    api
+                      .resetTaste()
+                      .then(() => setTaste({ likes: [], dislikes: [] }))
+                      .catch((e) => setError(messageOf(e)))
+                  }
+                >
+                  {t("Start again")}
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-soft">{t("Nothing yet. It learns as you plan, swap and choose meals.")}</p>
+            )}
           </Section>
 
           <Section title={t("Account")} note={t("Signed in as {email}", { email: auth.currentUser?.email ?? "" })}>

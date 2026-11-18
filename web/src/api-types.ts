@@ -403,6 +403,8 @@ export interface components {
             already_planned?: boolean;
             /** Last Week: cooked last week, so never picked for you */
             last_week?: boolean;
+            /** Not For Us: marked so, never suggested */
+            not_for_us?: boolean;
             /**
              * Fits Diets
              * @default true
@@ -618,6 +620,8 @@ export interface components {
             carried_from?: string | null;
             /** Uses Pantry: pantry food this meal uses */
             uses_pantry?: string[];
+            /** Reasons: why the app chose it */
+            reasons?: string[];
         };
         /** PantryDraft */
         PantryDraft: {
@@ -706,6 +710,10 @@ export interface components {
             title: string;
             /** Language of the title, steps and ingredient labels */
             language?: "en" | "pt";
+            /** Liked: ♥ */
+            liked?: boolean;
+            /** Not For Us: never suggested */
+            not_for_us?: boolean;
             /** Equipment */
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[];
             /**
@@ -897,6 +905,10 @@ export interface components {
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[] | null;
             /** Language: everyone in the household reads the app in it */
             language?: "en" | "pt";
+            /** Cook Minutes Weekday: longest a recipe may take; null for no limit */
+            cook_minutes_weekday?: number | null;
+            /** Cook Minutes Weekend */
+            cook_minutes_weekend?: number | null;
         };
         /** SiriItem */
         SiriItem: {

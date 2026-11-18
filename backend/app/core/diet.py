@@ -53,7 +53,7 @@ def fits(diets: list[str], recipe: Any) -> bool:
     return all(recipe.diet_fit.get(d, True) for d in diets if not is_excluding(d))
 
 
-def search_phrase(diets: list[str], needs: dict[str, int]) -> str:
+def search_phrase(diets: list[str], needs: dict[str, int], wishes: list[str] | None = None) -> str:
     """What to ask the web search for: healthy, varied dinners that fit every diet."""
     phrase = "healthy home-cooked dinner recipes"
     if diets:
@@ -67,4 +67,6 @@ def search_phrase(diets: list[str], needs: dict[str, int]) -> str:
         phrase += ", with a varied mix of main ingredients"
     if needs:
         phrase += ", including " + ", ".join(f"at least {n} with {tag}" for tag, n in needs.items())
+    if wishes:
+        phrase += "; " + "; ".join(wishes)
     return phrase

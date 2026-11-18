@@ -222,3 +222,31 @@ export function EquipmentFields({ settings, change }: { settings: Settings; chan
     </div>
   );
 }
+
+const MINUTES = [15, 20, 30, 45, 60, 90, 120];
+
+/** The longest a recipe may take on weekdays and at weekends; "no limit" is the default. */
+export function CookTimeFields({ settings, change }: { settings: Settings; change: Change }) {
+  const field = (key: "cook_minutes_weekday" | "cook_minutes_weekend", label: string) => (
+    <div>
+      <label htmlFor={key} className="field-label">{label}</label>
+      <select
+        id={key}
+        className="field"
+        value={settings[key] ?? ""}
+        onChange={(e) => change({ [key]: e.target.value === "" ? null : Number(e.target.value) })}
+      >
+        <option value="">{t("No limit")}</option>
+        {MINUTES.map((minutes) => (
+          <option key={minutes} value={minutes}>{t("Up to {n} min", { n: minutes })}</option>
+        ))}
+      </select>
+    </div>
+  );
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {field("cook_minutes_weekday", t("Weekdays"))}
+      {field("cook_minutes_weekend", t("Weekends"))}
+    </div>
+  );
+}

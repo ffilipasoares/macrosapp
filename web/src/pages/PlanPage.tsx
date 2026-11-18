@@ -22,6 +22,7 @@ import {
 } from "../components/ui";
 import { DAY_COLORS, ease, lastCookedLabel, proteinStyle } from "../lib/style";
 import { DAYS, MEALS, addWeeks, defaultWeekId, formatQuantity, isWeekId, weekLabel, weekRange } from "../lib/weeks";
+import { Feedback } from "../components/Feedback";
 import { MacrosCard } from "../components/MacrosCard";
 import { perPortion } from "../lib/macros";
 import { CATEGORIES, type Alternative, type Plan, type PlanMeal, type ReferencePortion, type Rule, type Settings, type WeekBalance } from "../types";
@@ -611,6 +612,36 @@ function MealScreen({
   const [options, setOptions] = useState<Alternative[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // ♥ is kept on the recipe in the library; a new idea from the web can't be ♥'d until saved.
+  const [liked, setLiked] = useState(!!meal?.recipe.liked);
+
+  async function toggleLike() {
+    if (!meal?.recipe.id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await api.recipeFeedback(meal.recipe.id, { liked: !liked });
+      setLiked(!!updated.liked);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** "Not for us": never suggested again, and swapped for something else now. */
+  async function notForUs() {
+    setSaving(true);
+    setError(null);
+    try {
+      onChanged(await api.notForUsMeal(weekId, slot));
+      onClose();
+    } catch (e) {
+      setError(messageOf(e));
+      setSaving(false);
+    }
+  }
+
   // "I'm not cooking this": next week's meals to pick from when it is full, then the outcome.
   const [skipChoice, setSkipChoice] = useState<string[] | null>(null);
   const [skipped, setSkipped] = useState<{ movedTo: string; warnings: string[] } | null>(null);
@@ -777,6 +808,20 @@ function MealScreen({
               {lastCookedLabel(recipe.last_planned_week, today)}
             </span>
             {meal!.is_new ? <NewIdea /> : null}
+          </div>
+          {(meal!.reasons ?? []).length ? (
+            <p className="mt-2 text-sm text-ink-soft">
+              <span className="font-semibold text-ink">{t("Why this:")}</span> {meal!.reasons!.join(" · ")}
+            </p>
+          ) : null}
+          <div className="mt-3">
+            <Feedback
+              liked={liked}
+              notForUs={false}
+              disabled={saving || !!meal!.is_new}
+              onLike={() => void toggleLike()}
+              onNotForUs={() => void notForUs()}
+            />
           </div>
         </header>
 

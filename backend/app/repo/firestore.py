@@ -15,7 +15,15 @@ import secrets
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from app.models import GroceryItem, Household, PantryItem, Recipe, Settings, WeekPlan
+from app.models import (
+    GroceryItem,
+    Household,
+    PantryItem,
+    Recipe,
+    Settings,
+    TasteProfile,
+    WeekPlan,
+)
 
 _BATCH_LIMIT = 400
 
@@ -102,6 +110,18 @@ class FirestoreRepo:
         self._pantry_ref(household_id).set(
             {"items": [item.model_dump(mode="json") for item in items]}
         )
+
+    # Taste: what the household likes, learned from what it does.
+
+    def _taste_ref(self, household_id: str) -> firestore.DocumentReference:
+        return self._household(household_id).collection("config").document("taste")
+
+    def get_taste(self, household_id: str) -> TasteProfile:
+        snapshot = self._taste_ref(household_id).get()
+        return TasteProfile(**snapshot.to_dict()) if snapshot.exists else TasteProfile()
+
+    def save_taste(self, household_id: str, taste: TasteProfile) -> None:
+        self._taste_ref(household_id).set(taste.model_dump(mode="json"))
 
     # Recipes --------------------------------------------------------------
 

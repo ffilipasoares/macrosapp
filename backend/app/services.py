@@ -16,6 +16,7 @@ from app import i18n, standards
 from app.ai.base import AIError, RecipeAI
 from app.core import balance, planner
 from app.core import pantry as pantry_logic
+from app.core import taste as taste_logic
 from app.core.allergens import found_in, missing_equipment
 from app.core.diet import fits, needs_verdict, search_phrase
 from app.core.grocery import build_grocery_lines, load_packs, scale_ingredients
@@ -35,6 +36,7 @@ from app.models import (
     RecipeDraft,
     Rule,
     Settings,
+    TasteProfile,
     WeekBalance,
     WeekPlan,
     now,
@@ -117,6 +119,7 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
     for meal in out.meals.values():
         if not meal.consumed:
             meal.uses_pantry = pantry_logic.used_by(pantry, meal.recipe.ingredients)
+    _explain(repo, household_id, out, settings)
 
     out.balance = WeekBalance.model_validate(
         balance.week_balance(
@@ -152,8 +155,13 @@ def _fill_with_suggestions(
     slot_count: int,
     settings: Settings,
     library_titles: list[str],
+    wishes: list[str] | None = None,
+    max_minutes: int | None = None,
 ) -> tuple[list[Recipe], set[str]]:
-    """Use web recipes to cover what the library could not: unmet rules, then empty slots."""
+    """Use web recipes to cover what the library could not: unmet rules, then empty slots.
+
+    ``wishes`` are the household's leanings and time limits, added to the search;
+    recipes longer than ``max_minutes`` fit no meal and are left out."""
     picks = list(picks)
     new_ids: set[str] = set()
     min_rules = [rule for rule in settings.rules if rule.kind == "min"]
@@ -177,14 +185,15 @@ def _fill_with_suggestions(
     total = max(gaps, sum(needs.values()))
     if total == 0:
         return picks, new_ids
-    query = search_phrase(settings.planning_needs(), needs)
+    query = search_phrase(settings.planning_needs(), needs, wishes)
     # Ask for a couple more than needed, since some pages will not work.
     drafts = find_web_recipes(ai, web.read_link, query, total + 2, titles, deadline)
     found = []
     for draft in drafts:
         # Found by a search for these diets, so they count as fitting them.
         recipe = Recipe(**draft.model_dump(), diet_fit={d: True for d in settings.diets})
-        if recipe.category == "main" and suits(settings, recipe):
+        too_long = max_minutes is not None and (recipe.prep_minutes or 0) > max_minutes
+        if recipe.category == "main" and suits(settings, recipe) and not too_long:
             found.append(recipe)
 
     def take(recipe: Recipe) -> None:
@@ -248,7 +257,7 @@ def _fill_with_suggestions(
                 remaining_gaps,
                 forbidden,
                 used_titles,
-                " and ".join(settings.planning_needs()),
+                "; ".join([" and ".join(settings.planning_needs()), *(wishes or [])]).strip("; "),
             )
             # Written for these diets, so they count as fitting them.
             extra_found = [
@@ -383,15 +392,24 @@ def generate_plan(
     )
     if problem:
         notes.append(problem)
-    recipes = [r for r in library if suits(settings, r) and r.id not in kept_ids]
+    recipes = [
+        r for r in library if suits(settings, r) and not r.not_for_us and r.id not in kept_ids
+    ]
     recent = recent_weeks(repo, household_id, week_id)
     rules = _adjusted_rules(all_rules(settings, len(settings.cook_slots())), kept_recipes)
     open_settings = settings.model_copy(update={"rules": rules})
 
     today = local_today(settings)
     pantry = settle_pantry(repo, household_id, today)
-    prefer = {r.id: pantry_logic.preference(pantry, r.ingredients, today) for r in recipes}
-    picks = planner.pick_recipes(recipes, len(slots), rules, recent, rng, prefer)
+    # The household's taste and the food at home decide between recipes the rules allow.
+    taste = repo.get_taste(household_id)
+    prefer = {
+        r.id: pantry_logic.preference(pantry, r.ingredients, today)
+        + taste_logic.score(taste, r, today)
+        for r in recipes
+    }
+    limits = [settings.cook_limit(slot) for slot in slots]
+    picks = planner.pick_recipes(recipes, len(slots), rules, recent, rng, prefer, limits)
     new_ids: set[str] = set()
     web = web or Web()
     deadline = time.monotonic() + web.search_seconds
@@ -406,7 +424,11 @@ def generate_plan(
                 picks,
                 len(slots),
                 open_settings,
-                [recipe.title for recipe in library],
+                [recipe.title for recipe in library] + taste.blocked,
+                search_wishes(settings, taste, today),
+                max((float("inf") if limit is None else limit) for limit in limits)
+                if limits and None not in limits
+                else None,
             )
         except AIError as error:
             notes.append(i18n.t(lang, "search_failed", error=error))
@@ -426,7 +448,7 @@ def generate_plan(
     for i, recipe in zip(fresh, in_language(ai, [picks[i] for i in fresh], lang), strict=True):
         picks[i] = recipe
     meals = dict(kept)
-    for slot, recipe in zip(slots, picks, strict=False):
+    for slot, recipe in planner.assign_slots(picks, slots, limits, rng).items():
         meals[slot] = PlanMeal(
             recipe=recipe, portions=settings.slots[slot].portions, is_new=recipe.id in new_ids
         )
@@ -478,12 +500,18 @@ def set_meal(
     slot: str,
     recipe_id: str | None,
     portions: int | None,
+    chosen: bool = True,
 ) -> WeekPlan:
-    """Put a recipe in a slot, change its portions, or clear the slot."""
+    """Put a recipe in a slot, change its portions, or clear the slot.
+
+    A recipe put in by hand (``chosen``) counts towards the household's taste, and the
+    one it replaced against it."""
     if slot not in SLOT_KEYS:
         raise NotFound(f"Unknown meal slot: {slot}")
     plan = repo.get_plan(household_id, week_id) or WeekPlan(week_id=week_id)
     existing = plan.meals.get(slot)
+    if recipe_id is not None and (existing is None or existing.recipe.id != recipe_id):
+        _learn_choice(repo, household_id, existing.recipe if existing else None, recipe_id, chosen)
 
     if recipe_id is None:
         plan.meals.pop(slot, None)
@@ -527,18 +555,25 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
     )
     for option in options:
         option.fits_diets = fits(settings.diets, option.recipe)
+        option.not_for_us = option.recipe.not_for_us
         option.warnings = warnings_for(settings, option.recipe)
     # Best suggestions first; everything else follows, flagged but still selectable:
     # main dishes before other types, then fitting the diets, then not already this
     # week, then keeping the rules (the order within each step stays as ranked).
+    # Within each step, what the household likes most comes first.
+    taste = repo.get_taste(household_id)
+    today = local_today(settings)
+    liked = {o.recipe.id: taste_logic.score(taste, o.recipe, today) for o in options}
     options.sort(
         key=lambda option: (
             option.recipe.category != "main",
             not option.fits_diets,
             bool(option.warnings),
+            option.not_for_us,
             option.already_planned,
             option.last_week,
             not option.keeps_rules,
+            -round(liked[option.recipe.id] * 2) / 2,
         )
     )
     return options
@@ -588,6 +623,7 @@ def swap_meal(
         for option in meal_alternatives(repo, household_id, week_id, slot)
         if option.recipe.category == "main"
         and not option.last_week
+        and not option.not_for_us
         and option.fits_diets
         and not option.warnings
         and not option.already_planned
@@ -595,9 +631,14 @@ def swap_meal(
     if not options:
         raise NotFound("No other recipe in your library fits this meal. Add more recipes.")
     keeping = [option for option in options if option.keeps_rules] or options
-    # Options come best first (rules kept, not eaten recently, cooked longest ago).
-    choice = rng.choice(keeping[:5])
-    return set_meal(repo, household_id, week_id, slot, choice.recipe.id, None)
+    # Options come best first (rules kept, not eaten recently, cooked longest ago); among
+    # the best few, the one the household likes most.
+    today = local_today(repo.get_settings(household_id))
+    taste = repo.get_taste(household_id)
+    top = keeping[:5]
+    rng.shuffle(top)
+    choice = max(top, key=lambda option: taste_logic.score(taste, option.recipe, today))
+    return set_meal(repo, household_id, week_id, slot, choice.recipe.id, None, chosen=False)
 
 
 def approve_plan(
@@ -657,6 +698,13 @@ def approve_plan(
             stored.last_planned_week = week_id
         repo.save_recipe(household_id, stored)
 
+    if plan.status != "approved":
+        # The meals that made it to the grocery list: a small "this works".
+        taste = repo.get_taste(household_id)
+        today = local_today(settings)
+        for meal in ordered:
+            taste = taste_logic.nudge(taste, meal.recipe, taste_logic.KEPT, today)
+        repo.save_taste(household_id, taste)
     plan.status = "approved"
     plan.approved_at = now()
     repo.save_plan(household_id, plan)
@@ -1212,3 +1260,117 @@ def run_plan_job(
                 f"{app_url}/plan/{job.week_id}" if app_url else "",
             )
             repo.remove_device_tokens(household.id, invalid)
+
+
+# Taste --------------------------------------------------------------------------------------
+
+
+def _learn_choice(
+    repo: Repo, household_id: str, replaced: Recipe | None, recipe_id: str, chosen: bool
+) -> None:
+    """A meal changed: the one replaced counts against, the one chosen by hand for."""
+    today = local_today(repo.get_settings(household_id))
+    taste = repo.get_taste(household_id)
+    if replaced is not None:
+        taste = taste_logic.nudge(taste, replaced, taste_logic.SWAPPED_OUT, today)
+    if chosen:
+        recipe = repo.get_recipe(household_id, recipe_id)
+        if recipe is not None:
+            taste = taste_logic.nudge(taste, recipe, taste_logic.CHOSE, today)
+    repo.save_taste(household_id, taste)
+
+
+def search_wishes(settings: Settings, taste: TasteProfile, today: date) -> list[str]:
+    """What to add to a web search for this household: time limits and leanings."""
+    wishes = []
+    if settings.cook_minutes_weekday:
+        wishes.append(f"most ready in under {settings.cook_minutes_weekday} minutes")
+    likes, dislikes = taste_logic.leanings(taste, today, 3)
+    words = [key.split(":", 1)[1] for key in likes]
+    if words:
+        wishes.append("favouring " + ", ".join(words))
+    avoid = [key.split(":", 1)[1] for key in dislikes]
+    if avoid:
+        wishes.append("not " + ", ".join(avoid))
+    return wishes
+
+
+def set_feedback(
+    repo: Repo, household_id: str, recipe_id: str, liked: bool | None, not_for_us: bool | None
+) -> Recipe:
+    """♥ a recipe (or take it back), or mark it "Not for us": never suggested again."""
+    recipe = repo.get_recipe(household_id, recipe_id)
+    if recipe is None:
+        raise NotFound("Recipe not found")
+    today = local_today(repo.get_settings(household_id))
+    taste = repo.get_taste(household_id)
+    if liked is not None and liked != recipe.liked:
+        recipe.liked = liked
+        if liked:
+            recipe.not_for_us = False
+        taste = taste_logic.nudge(taste, recipe, 1.0 if liked else -1.0, today)
+    if not_for_us is not None and not_for_us != recipe.not_for_us:
+        recipe.not_for_us = not_for_us
+        if not_for_us:
+            recipe.liked = False
+            taste = taste_logic.nudge(taste, recipe, taste_logic.NOT_FOR_US, today)
+    repo.save_recipe(household_id, recipe)
+    repo.save_taste(household_id, taste)
+    return recipe
+
+
+def not_for_us_meal(
+    repo: Repo, household_id: str, week_id: str, slot: str, rng: random.Random
+) -> WeekPlan:
+    """ "Not for us" on a planned meal: never suggest it again, and swap it now."""
+    plan = repo.get_plan(household_id, week_id)
+    if plan is None or slot not in plan.meals:
+        raise NotFound("There is no meal there")
+    recipe = plan.meals[slot].recipe
+    if repo.get_recipe(household_id, recipe.id) is not None:
+        set_feedback(repo, household_id, recipe.id, None, True)
+    else:
+        # A new idea from the web that was never saved: remember its title instead.
+        taste = repo.get_taste(household_id)
+        today = local_today(repo.get_settings(household_id))
+        taste = taste_logic.nudge(taste, recipe, taste_logic.NOT_FOR_US, today)
+        if recipe.title not in taste.blocked:
+            taste.blocked = [*taste.blocked, recipe.title][-200:]
+        repo.save_taste(household_id, taste)
+    try:
+        return swap_meal(repo, household_id, week_id, slot, rng)
+    except NotFound:
+        return set_meal(repo, household_id, week_id, slot, None, None)
+
+
+def taste_summary(repo: Repo, household_id: str) -> dict[str, list[str]]:
+    """What the app has learned, as traits: {"likes": [...], "dislikes": [...]}."""
+    today = local_today(repo.get_settings(household_id))
+    likes, dislikes = taste_logic.leanings(repo.get_taste(household_id), today, 6)
+    return {"likes": likes, "dislikes": dislikes}
+
+
+def reset_taste(repo: Repo, household_id: str) -> None:
+    repo.save_taste(household_id, TasteProfile())
+
+
+def _explain(repo: Repo, household_id: str, out: PlanOut, settings: Settings) -> None:
+    """ "Why this?" for each meal, in plain words: liked, a favourite kind, or new."""
+    lang = settings.language
+    today = local_today(settings)
+    likes, _ = taste_logic.leanings(repo.get_taste(household_id), today, 6)
+    library = {r.id: r for r in repo.list_recipes(household_id)}
+    for meal in out.meals.values():
+        recipe = library.get(meal.recipe.id, meal.recipe)
+        reasons = []
+        if recipe.liked:
+            reasons.append(i18n.t(lang, "reason_liked"))
+        else:
+            mine = set(taste_logic.traits(recipe))
+            favourite = next((key for key in likes if key in mine), None)
+            if favourite:
+                what = i18n.word(lang, favourite.split(":", 1)[1])
+                reasons.append(i18n.t(lang, "reason_often", what=what))
+        if meal.is_new or recipe.last_planned_week is None:
+            reasons.append(i18n.t(lang, "reason_new"))
+        meal.reasons = reasons

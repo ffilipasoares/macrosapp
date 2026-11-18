@@ -121,6 +121,16 @@ def skip(
         raise HTTPException(404, str(error)) from error
 
 
+@router.post("/{week_id}/meals/{slot}/not-for-us")
+def not_for_us(week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep) -> PlanOut:
+    """Never suggest this meal again, and swap it now."""
+    try:
+        plan = services.not_for_us_meal(repo, household.id, _week(week_id), slot, random.Random())
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+    return services.plan_out(repo, household.id, plan)
+
+
 @router.get("/{week_id}/meals/{slot}/alternatives")
 def alternatives(
     week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep
