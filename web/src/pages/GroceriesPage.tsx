@@ -1,6 +1,6 @@
 import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, Share2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { PantryView } from "../components/PantryView";
@@ -31,6 +31,7 @@ export function GroceriesPage() {
   const [view, setView] = useState<"buy" | "home">("buy");
   const [putting, setPutting] = useState(false);
   const [putAwayNote, setPutAwayNote] = useState<string | null>(null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   const groceries = useMemo(() => collection(db, "households", householdId, "groceries"), [householdId]);
 
@@ -140,6 +141,23 @@ export function GroceriesPage() {
     }
   }
 
+  /** Send what is still to buy to someone else: the phone's share sheet, else copy it. */
+  async function shareList() {
+    const text = listText(waiting);
+    setError(null);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: t("Grocery list"), text });
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      setShareNote(t("List copied. Paste it in a message."));
+    } catch (e) {
+      // Closing the share sheet is not an error.
+      if ((e as { name?: string })?.name !== "AbortError") setError(t("The list could not be shared. Try again."));
+    }
+  }
+
   function clearBasket() {
     if (!live) {
       void viaBackend(() => api.clearCheckedGroceries());
@@ -156,7 +174,17 @@ export function GroceriesPage() {
         <header>
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-3xl font-bold tracking-tight">{t("Groceries")}</h1>
-            {view === "buy" && all.length ? <p className="text-sm font-medium text-ink-soft">{t("{n} to buy", { n: waiting.length })}</p> : null}
+            {view === "buy" && waiting.length ? (
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-ink-soft">{t("{n} to buy", { n: waiting.length })}</p>
+                <button
+                  onClick={() => void shareList()}
+                  className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm font-semibold ring-1 ring-line hover:ring-ink-soft"
+                >
+                  <Share2 size={15} /> {t("Share")}
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="mt-3 grid grid-cols-2 gap-1 rounded-full bg-card p-1 ring-1 ring-line" role="tablist" aria-label={t("Groceries")}>
             {(
@@ -253,6 +281,8 @@ export function GroceriesPage() {
           })
         )}
 
+        {shareNote && view === "buy" ? <p className="rounded-2xl bg-green-soft px-4 py-3 text-sm font-medium">{shareNote}</p> : null}
+
         {putAwayNote ? (
           <button onClick={() => setView("home")} className="rounded-2xl bg-green-soft px-4 py-3 text-left text-sm font-semibold">
             {putAwayNote} {t("See what's at home →")}
@@ -345,4 +375,20 @@ function Row({ item, onToggle, onRemove }: { item: GroceryItem; onToggle: (item:
       </div>
     </motion.li>
   );
+}
+
+/** The list as plain text, by aisle, for a message: "Fruit & veg", then "• Spinach · 1 bag (300 g)". */
+function listText(items: GroceryItem[]): string {
+  const lines = [t("Grocery list")];
+  for (const aisle of AISLE_STYLE) {
+    const inAisle = items.filter((item) => (item.aisle ?? "other") === aisle.key);
+    if (!inAisle.length) continue;
+    lines.push("", aisle.label);
+    for (const item of inAisle.sort((a, b) => foodName(a).localeCompare(foodName(b)))) {
+      const amount = item.pack || formatQuantity(item.quantity, item.unit);
+      const name = foodName(item);
+      lines.push(`• ${name.charAt(0).toUpperCase()}${name.slice(1)}${amount ? ` · ${amount}` : ""}`);
+    }
+  }
+  return lines.join("\n");
 }

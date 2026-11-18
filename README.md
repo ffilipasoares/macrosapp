@@ -68,6 +68,8 @@ can be combined. Only main dishes are used in the weekly plan.
 and "At home", your pantry.
 - Items from the plan show the amount and which recipes need them.
 - Add items by typing (several at once with commas). Duplicates are skipped.
+- **Share** sends what is still to buy as a message (WhatsApp, Messages, email), by aisle,
+  for someone in the household without the app.
 - Tick items as you shop; they move to "In the basket". **Put away** moves them into
   the pantry; **Clear** just removes them.
 - Changes appear on the other phone immediately, and the list keeps working
