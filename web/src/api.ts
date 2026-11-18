@@ -1,5 +1,5 @@
 import { auth } from "./firebase";
-import type { Alternative, GroceryItem, Me, Plan, Recipe, RecipeDraft, Settings } from "./types";
+import type { Alternative, GroceryItem, Me, PantryDraft, PantryItem, Plan, Recipe, RecipeDraft, Settings, SkipResult } from "./types";
 
 export class ApiError extends Error {
   constructor(
@@ -109,6 +109,31 @@ export const api = {
   /** Drag and drop: swap two meals, or move one to an empty day. Each day keeps its portions. */
   moveMeal: (weekId: string, slot: string, toSlot: string) =>
     request<Plan>(`/plans/${weekId}/meals/${slot}/move`, json("POST", { to_slot: toSlot })),
+  /** "I'm not cooking this": the food stays in the pantry, the recipe moves to next week. */
+  skipMeal: (weekId: string, slot: string, replaceSlot?: string) =>
+    request<SkipResult>(`/plans/${weekId}/meals/${slot}/skip`, json("POST", { replace_slot: replaceSlot ?? null })),
+
+  listPantry: () => request<PantryItem[]>("/pantry"),
+  /** Typed food, e.g. "2 eggs, half a courgette". Saved straight away. */
+  addPantryText: (text: string) => request<PantryItem[]>("/pantry/text", json("POST", { text })),
+  /** Food seen in photos of the fridge or cupboards; not saved until addPantryItems. */
+  readPantryImages: async (files: File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", await shrinkImage(file));
+    return request<PantryDraft[]>("/pantry/read/images", { method: "POST", body: form }, AI_TIMEOUT_MS);
+  },
+  /** Food said out loud; not saved until addPantryItems. */
+  readPantryAudio: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<PantryDraft[]>("/pantry/read/audio", { method: "POST", body: form }, AI_TIMEOUT_MS);
+  },
+  addPantryItems: (drafts: PantryDraft[]) => request<PantryItem[]>("/pantry/items", json("POST", drafts)),
+  updatePantryItem: (id: string, draft: PantryDraft) => request<PantryItem[]>(`/pantry/items/${id}`, json("PUT", draft)),
+  removePantryItem: (id: string) => request<PantryItem[]>(`/pantry/items/${id}`, { method: "DELETE" }),
+  /** Shopping done: everything in the basket moves into the pantry. */
+  putAway: () => request<{ moved: number }>("/pantry/put-away", { method: "POST" }),
+
   /** Swap a meal in one tap for another recipe that keeps the rules. */
   swapMeal: (weekId: string, slot: string) => request<Plan>(`/plans/${weekId}/meals/${slot}/swap`, { method: "POST" }),
   alternatives: (weekId: string, slot: string) =>

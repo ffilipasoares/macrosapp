@@ -19,7 +19,14 @@ from pydantic import BaseModel, ValidationError
 
 from app.ai.base import AIError
 from app.core.allergens import Equipment
-from app.models import Aisle, Category, Ingredient, IngredientNutrition, RecipeDraft
+from app.models import (
+    Aisle,
+    Category,
+    Ingredient,
+    IngredientNutrition,
+    PantryDraft,
+    RecipeDraft,
+)
 
 log = logging.getLogger(__name__)
 
@@ -70,6 +77,20 @@ class _AiIngredient(BaseModel):
     quantity: float | None
     unit: str
     aisle: Aisle
+
+
+class _AiPantry(BaseModel):
+    items: list[_AiIngredient]
+
+
+_PANTRY_RULES = """
+List each food once, in English, singular and lower case ("courgette", not "Courgettes").
+- quantity and unit: what is there, as far as you can tell ("g", "ml", "kg", "l", or ""
+  for things counted whole, such as eggs); quantity null when you cannot tell.
+- aisle is where a supermarket would stock it.
+- Leave out drinks, condiments in small amounts, and anything you are unsure is food.
+- Never invent food that is not there.
+"""
 
 
 class _AiRecipe(BaseModel):
@@ -434,6 +455,34 @@ class GeminiRecipeAI:
             if 0 <= item.index < len(recipes) and len(item.fits) == len(diets):
                 verdicts[item.index] = dict(zip(diets, item.fits, strict=True))
         return verdicts
+
+    def _pantry(self, contents: list, what: str) -> list[PantryDraft]:
+        result = self._structured(contents, _AiPantry, what)
+        drafts = []
+        for item in result.items[:80]:
+            try:
+                drafts.append(PantryDraft(**item.model_dump()))
+            except ValidationError:
+                log.warning("Dropped unusable pantry item from model output: %r", item.name)
+        return drafts
+
+    def pantry_from_images(self, images: list[tuple[bytes, str]]) -> list[PantryDraft]:
+        prompt = (
+            f"These {len(images)} photo(s) show the inside of a fridge, freezer or cupboard. "
+            "List the food you can see, with rough amounts." + _PANTRY_RULES
+        )
+        parts = [types.Part.from_bytes(data=data, mime_type=mime) for data, mime in images]
+        return self._pantry([*parts, prompt], "pantry photo")
+
+    def pantry_from_audio(self, data: bytes, mime_type: str) -> list[PantryDraft]:
+        prompt = (
+            "In this recording someone says, in English or Portuguese, what food they have at "
+            "home, possibly with corrections. List the food they mean, with the amounts they "
+            "say; use their latest correction." + _PANTRY_RULES
+        )
+        return self._pantry(
+            [types.Part.from_bytes(data=data, mime_type=mime_type), prompt], "pantry voice"
+        )
 
     def _search_once(self, query: str, count: int, avoid: str) -> list[str]:
         target = min(max(count + 2, 4), 8)

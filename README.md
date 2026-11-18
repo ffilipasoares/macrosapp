@@ -21,6 +21,9 @@ Google Cloud.
 | Cook once, eat twice | Lets you set portions per meal (Thursday dinner for 3 covers Friday lunch) and scales recipes to match |
 | Stop writing grocery lists | Merges all ingredients of the approved plan into one list, grouped by aisle, minus what you always have |
 | Add things during the week | Type them in, or say "Hey Siri, add to groceries" |
+| Know what's at home | "At home" (in Groceries) lists the food you have, closest to its use-by first. Add it by typing, saying it, or a photo of the fridge; "Put away" after shopping adds the basket. Meals are taken out as their day passes |
+| Waste less | Plans prefer recipes that use food at home and share opened packs; the list buys whole packs ("1 bag (300 g), recipes need 200 g") and only what is missing |
+| Change your mind | "I'm not cooking this" on any meal, even the day after: its food stays at home and the recipe moves to next week's first free meal, with a warning if fresh food won't keep |
 | Save a recipe you saw | Reads it from one or several screenshots, a TikTok or recipe link, a saved cooking video, or pasted text; translates it to English; lets you check it before saving |
 | Eat the way you want | Choose one or more diets in Settings (Mediterranean, high protein, low carb, pescatarian, vegetarian, vegan, or your own). Plans and web ideas follow all of them; your own recipes are checked once against each diet. "Update this week" applies a change to an existing plan, keeping the meals that already fit |
 | Move meals between days | Drag a meal by its grip onto another day to swap them, or onto an empty day to move it; each day keeps its portions |
@@ -56,10 +59,12 @@ can be combined. Only main dishes are used in the weekly plan.
 - Recipes sent from the iPhone share sheet are saved straight away and marked
   "check this".
 
-**Groceries**. The shopping list, grouped by supermarket aisle.
+**Groceries**. Two views: "To buy", the shopping list grouped by supermarket aisle,
+and "At home", your pantry.
 - Items from the plan show the amount and which recipes need them.
 - Add items by typing (several at once with commas). Duplicates are skipped.
-- Tick items as you shop; they move to "In the basket", which you can clear.
+- Tick items as you shop; they move to "In the basket". **Put away** moves them into
+  the pantry; **Clear** just removes them.
 - Changes appear on the other phone immediately, and the list keeps working
   with no signal and syncs later.
 - Approving a plan again replaces only the items that plan generated. Items you

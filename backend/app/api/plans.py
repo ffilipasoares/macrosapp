@@ -96,6 +96,22 @@ def swap(week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep) ->
     return services.plan_out(repo, household.id, plan)
 
 
+class SkipRequest(BaseModel):
+    # When next week is full, the meal there to replace (from a previous answer).
+    replace_slot: str | None = None
+
+
+@router.post("/{week_id}/meals/{slot}/skip")
+def skip(
+    week_id: str, slot: str, body: SkipRequest, household: CurrentHousehold, repo: RepoDep
+) -> services.SkipResult:
+    """ "I'm not cooking this": keep the food in the pantry, move the recipe to next week."""
+    try:
+        return services.skip_meal(repo, household.id, _week(week_id), slot, body.replace_slot)
+    except services.NotFound as error:
+        raise HTTPException(404, str(error)) from error
+
+
 @router.get("/{week_id}/meals/{slot}/alternatives")
 def alternatives(
     week_id: str, slot: str, household: CurrentHousehold, repo: RepoDep

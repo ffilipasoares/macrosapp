@@ -509,6 +509,13 @@ function MealRow({
           {meal.recipe.macros ? <span>{perPortion(meal.recipe.macros, meal.recipe.servings ?? 1, reference).kcal} kcal</span> : null}
           {meal.is_new ? <NewIdea /> : null}
         </span>
+        {meal.carried_from || (meal.uses_pantry ?? []).length ? (
+          <span className="mt-0.5 block truncate text-xs text-green">
+            {meal.carried_from ? `Moved from ${slotName(meal.carried_from.split(" ")[1] ?? "")}` : ""}
+            {meal.carried_from && (meal.uses_pantry ?? []).length ? " · " : ""}
+            {(meal.uses_pantry ?? []).length ? `Uses ${meal.uses_pantry!.join(", ")} from home` : ""}
+          </span>
+        ) : null}
       </span>
     </button>
       {onSwap ? (
@@ -567,6 +574,29 @@ function MealScreen({
   const [options, setOptions] = useState<Alternative[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // "I'm not cooking this": next week's meals to pick from when it is full, then the outcome.
+  const [skipChoice, setSkipChoice] = useState<string[] | null>(null);
+  const [skipped, setSkipped] = useState<{ movedTo: string; warnings: string[] } | null>(null);
+
+  async function skip(replaceSlot?: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await api.skipMeal(weekId, slot, replaceSlot);
+      if (result.moved_to) {
+        setSkipChoice(null);
+        setSkipped({ movedTo: result.moved_to, warnings: result.warnings ?? [] });
+        const fresh = await api.getPlan(weekId);
+        if (fresh) onChanged(fresh);
+      } else {
+        setSkipChoice(result.choose_from ?? []);
+      }
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!choosing || options) return;
@@ -584,6 +614,46 @@ function MealScreen({
     } finally {
       setSaving(false);
     }
+  }
+
+  if (skipped) {
+    const [, movedSlot] = skipped.movedTo.split(" ");
+    return (
+      <Overlay>
+        <div className="mx-auto flex max-w-2xl flex-col gap-4 px-5 pb-10 pt-[calc(1.25rem+env(safe-area-inset-top))]">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight">Moved to next week</h1>
+          <p className="text-ink-soft">
+            {meal?.recipe.title} is now next {slotName(movedSlot ?? "")}. Its food stays in your pantry, so it won't be bought again.
+          </p>
+          {skipped.warnings.map((warning) => (
+            <p key={warning} className="rounded-2xl bg-mustard-soft px-4 py-3 text-sm font-medium">{warning}</p>
+          ))}
+          <button onClick={onClose} className={darkButton}>Done</button>
+        </div>
+      </Overlay>
+    );
+  }
+
+  if (skipChoice) {
+    return (
+      <Overlay>
+        <div className="mx-auto flex max-w-2xl flex-col gap-4 px-5 pb-10 pt-[calc(1.25rem+env(safe-area-inset-top))]">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight">Next week is full</h1>
+          <p className="text-ink-soft">Which meal should {meal?.recipe.title} replace?</p>
+          <ErrorNote message={error} />
+          <ul className="flex flex-col gap-1">
+            {skipChoice.map((choice) => (
+              <li key={choice}>
+                <button onClick={() => void skip(choice)} disabled={saving} className={listButton}>
+                  <span className="font-semibold">{slotName(choice)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button onClick={() => setSkipChoice(null)} className={quietButton}>Cancel</button>
+        </div>
+      </Overlay>
+    );
   }
 
   if (choosing) {
@@ -727,6 +797,12 @@ function MealScreen({
             Remove
           </button>
         </div>
+        <button onClick={() => void skip()} disabled={saving} className={quietButton}>
+          I'm not cooking this
+        </button>
+        <p className="-mt-3 text-center text-xs text-ink-soft">
+          Keeps its food in your pantry and moves it to next week. Works the day after too.
+        </p>
       </div>
     </Overlay>
   );

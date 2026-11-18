@@ -45,13 +45,17 @@ def pick_recipes(
     recent_ids: set[str],
     max_repeat_ratio: float,
     rng: random.Random,
+    prefer: dict[str, float] | None = None,
 ) -> list[Recipe]:
     """Choose up to ``slot_count`` different recipes.
 
     Order of priority: never exceed a "max" rule or the repeat allowance, then
-    satisfy "min" rules, then prefer recipes that were cooked longest ago.
+    satisfy "min" rules, then prefer recipes that use food already at home
+    (``prefer``: a score per recipe id) and fresh food already bought for another
+    meal this week, then recipes that were cooked longest ago.
     Returns fewer than ``slot_count`` recipes when the library is too small.
     """
+    prefer = prefer or {}
     repeat_budget = max_repeats(slot_count, max_repeat_ratio)
     min_rules = [rule for rule in rules if rule.kind == "min"]
     max_rules = [rule for rule in rules if rule.kind == "max"]
@@ -59,8 +63,10 @@ def pick_recipes(
     def ordered(pool: Iterable[Recipe]) -> list[Recipe]:
         shuffled = list(pool)
         rng.shuffle(shuffled)
-        # Fresh before recent, then never-planned first, then oldest first.
-        shuffled.sort(key=lambda r: (r.id in recent_ids, r.last_planned_week or ""))
+        # Fresh before recent, then food at home first, then never-planned, then oldest.
+        shuffled.sort(
+            key=lambda r: (r.id in recent_ids, -prefer.get(r.id, 0.0), r.last_planned_week or "")
+        )
         return shuffled
 
     chosen: list[Recipe] = []
@@ -88,14 +94,32 @@ def pick_recipes(
             if can_add(recipe):
                 add(recipe)
 
-    for recipe in ordered(recipes):
-        if len(chosen) >= slot_count:
+    # Fill the rest, keeping that order, but among equally good recipes take the one
+    # that shares the most fresh food with meals already chosen: one bag of spinach
+    # then covers two meals.
+    rest = [recipe for recipe in ordered(recipes) if recipe.id not in chosen_ids]
+    while len(chosen) < slot_count:
+        options = [recipe for recipe in rest if can_add(recipe)]
+        if not options:
             break
-        if can_add(recipe):
-            add(recipe)
+        best = options[0]
+        rank = (best.id in recent_ids, -prefer.get(best.id, 0.0))
+        same_rank = [r for r in options if (r.id in recent_ids, -prefer.get(r.id, 0.0)) == rank]
+        pick = max(same_rank, key=lambda r: _shared_fresh(r, chosen))  # first wins a tie
+        rest.remove(pick)
+        add(pick)
 
     rng.shuffle(chosen)
     return chosen
+
+
+# Meat and fish are left out: sharing them would make two meals of the same protein.
+_FRESH = ("produce", "dairy_eggs", "bakery")
+
+
+def _shared_fresh(recipe: Recipe, chosen: list[Recipe]) -> int:
+    fresh = {i.name for r in chosen for i in r.ingredients if i.aisle in _FRESH}
+    return sum(1 for i in recipe.ingredients if i.aisle in _FRESH and i.name in fresh)
 
 
 def rule_status(

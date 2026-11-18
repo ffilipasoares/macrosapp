@@ -10,19 +10,25 @@ from datetime import date, datetime, timedelta
 from datetime import time as dt_time
 from zoneinfo import ZoneInfo
 
+from pydantic import BaseModel, Field
+
 from app import standards
 from app.ai.base import AIError, RecipeAI
 from app.core import balance, planner
+from app.core import pantry as pantry_logic
 from app.core.allergens import found_in, missing_equipment
 from app.core.diet import fits, needs_verdict, search_phrase
-from app.core.grocery import build_grocery_lines
+from app.core.grocery import build_grocery_lines, load_packs, scale_ingredients
 from app.core.ingredients import guess_aisle, normalize_name
 from app.core.weeks import DAYS, SLOT_KEYS, next_week_id, previous_week_ids
+from app.core.weeks import week_id as week_id_of
 from app.images import ImageStore, keep_own_copy
 from app.links import LinkContent, read_image, read_link
 from app.models import (
     Alternative,
     GroceryItem,
+    PantryDraft,
+    PantryItem,
     PlanMeal,
     PlanOut,
     Recipe,
@@ -94,6 +100,11 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
         if same and meal.recipe.macros is None and saved.macros is not None:
             meal.recipe.ingredients = saved.ingredients
             meal.recipe.refresh_macros()
+
+    pantry = repo.get_pantry(household_id)
+    for meal in out.meals.values():
+        if not meal.consumed:
+            meal.uses_pantry = pantry_logic.used_by(pantry, meal.recipe.ingredients)
 
     out.balance = WeekBalance.model_validate(
         balance.week_balance(
@@ -312,7 +323,14 @@ def generate_plan(
     Meals in ``keep`` stay as they are; the other meals are chosen around them.
     """
     settings = repo.get_settings(household_id)
-    kept = dict(keep or {})
+    # Meals moved here by "I'm not cooking this" always stay.
+    existing = repo.get_plan(household_id, week_id)
+    carried = {
+        slot: meal
+        for slot, meal in (existing.meals if existing else {}).items()
+        if meal.carried_from
+    }
+    kept = {**carried, **(keep or {})}
     slots = [slot for slot in settings.cook_slots() if slot not in kept]
     kept_recipes = [meal.recipe for meal in kept.values()]
     kept_ids = {recipe.id for recipe in kept_recipes}
@@ -328,7 +346,12 @@ def generate_plan(
     rules = _adjusted_rules(all_rules(settings, len(settings.cook_slots())), kept_recipes)
     open_settings = settings.model_copy(update={"rules": rules})
 
-    picks = planner.pick_recipes(recipes, len(slots), rules, recent, settings.max_repeat_ratio, rng)
+    today = local_today(settings)
+    pantry = settle_pantry(repo, household_id, today)
+    prefer = {r.id: pantry_logic.preference(pantry, r.ingredients, today) for r in recipes}
+    picks = planner.pick_recipes(
+        recipes, len(slots), rules, recent, settings.max_repeat_ratio, rng, prefer
+    )
     new_ids: set[str] = set()
     web = web or Web()
     deadline = time.monotonic() + web.search_seconds
@@ -556,8 +579,14 @@ def approve_plan(
     settings = repo.get_settings(household_id)
 
     ordered = [plan.meals[slot] for slot in SLOT_KEYS if slot in plan.meals]
+    # Meals already cooked need nothing more; the pantry covers what is at home.
+    to_buy = [meal for meal in ordered if not meal.consumed]
+    pantry = settle_pantry(repo, household_id, local_today(settings))
     lines = build_grocery_lines(
-        [(meal.recipe, meal.portions) for meal in ordered], settings.staples
+        [(meal.recipe, meal.portions) for meal in to_buy],
+        settings.staples,
+        pantry,
+        load_packs(),
     )
     items = [
         GroceryItem(
@@ -568,6 +597,9 @@ def approve_plan(
             source="plan",
             week_id=week_id,
             recipes=line.recipes,
+            needed=line.needed,
+            pack=line.pack,
+            note=line.note,
         )
         for line in lines
     ]
@@ -660,7 +692,8 @@ def run_weekly_job(
                 summary["waiting"] += 1
                 continue
             target = next_week_id(local_now.date())
-            if repo.get_plan(household.id, target) is not None:
+            existing = repo.get_plan(household.id, target)
+            if existing is not None and not existing.pending:
                 summary["skipped"] += 1
                 continue
             generate_plan(repo, ai, household.id, target, rng or random.Random(), web)
@@ -711,3 +744,227 @@ def recalculate_macros(repo: Repo, ai: RecipeAI, household_id: str, recipe_id: s
     fill_nutrition(ai, recipe)
     repo.save_recipe(household_id, recipe)
     return recipe
+
+
+# Pantry ---------------------------------------------------------------------------------
+
+
+def local_today(settings: Settings) -> date:
+    return datetime.now(ZoneInfo(settings.timezone)).date()
+
+
+def _meal_date(week_id: str, slot: str) -> date:
+    return date.fromisoformat(week_id) + timedelta(days=DAYS.index(slot.split("_")[0]))
+
+
+def _meal_label(week_id: str, slot: str, recipe: Recipe) -> str:
+    day = _meal_date(week_id, slot).strftime("%A")
+    return f"{day}'s {recipe.title.lower()}"
+
+
+def settle_pantry(repo: Repo, household_id: str, today: date | None = None) -> list[PantryItem]:
+    """Take the food of every meal whose day has passed out of the pantry, once.
+
+    Only approved plans count: that is when the food was bought. A meal marked
+    "I'm not cooking this" has already left the plan, so it is never taken.
+    """
+    settings = repo.get_settings(household_id)
+    today = today or local_today(settings)
+    pantry = repo.get_pantry(household_id)
+    changed = False
+    this_week = week_id_of(today)
+    for week in (*previous_week_ids(this_week, 1), this_week):
+        plan = repo.get_plan(household_id, week)
+        if plan is None or plan.status != "approved":
+            continue
+        cooked = [
+            meal
+            for slot, meal in plan.meals.items()
+            if not meal.consumed and _meal_date(week, slot) < today
+        ]
+        for meal in cooked:
+            pantry = pantry_logic.take(pantry, scale_ingredients(meal.recipe, meal.portions))
+            meal.consumed = True
+        if cooked:
+            repo.save_plan(household_id, plan)
+            changed = True
+    if changed:
+        repo.save_pantry(household_id, pantry)
+    return pantry
+
+
+def list_pantry(repo: Repo, household_id: str) -> list[PantryItem]:
+    """The pantry, food closest to its use-by first."""
+    items = settle_pantry(repo, household_id)
+    return sorted(items, key=lambda i: (i.use_by is None, i.use_by or date.max, i.name))
+
+
+def add_to_pantry(
+    repo: Repo, household_id: str, drafts: list[PantryDraft], source: str = "manual"
+) -> list[PantryItem]:
+    today = local_today(repo.get_settings(household_id))
+    new = [
+        PantryItem(
+            **draft.model_dump(),
+            use_by=pantry_logic.use_by(draft.aisle, today),
+            source=source,  # type: ignore[arg-type]
+        )
+        for draft in drafts
+    ]
+    items = pantry_logic.add(settle_pantry(repo, household_id, today), new)
+    repo.save_pantry(household_id, items)
+    return list_pantry(repo, household_id)
+
+
+def pantry_from_text(repo: Repo, household_id: str, text: str) -> list[PantryItem]:
+    """ "2 eggs, half a courgette": no AI needed for typed food."""
+    drafts = [
+        PantryDraft(name=name, quantity=quantity, unit=unit)
+        for name, quantity, unit in pantry_logic.parse_text(text)
+    ]
+    return add_to_pantry(repo, household_id, drafts)
+
+
+def update_pantry_item(
+    repo: Repo, household_id: str, item_id: str, draft: PantryDraft
+) -> list[PantryItem]:
+    items = settle_pantry(repo, household_id)
+    item = next((i for i in items if i.id == item_id), None)
+    if item is None:
+        raise NotFound("That food is no longer in the pantry")
+    item.name, item.quantity, item.unit = draft.name, draft.quantity, draft.unit
+    repo.save_pantry(household_id, items)
+    return list_pantry(repo, household_id)
+
+
+def remove_pantry_item(repo: Repo, household_id: str, item_id: str) -> list[PantryItem]:
+    items = [i for i in settle_pantry(repo, household_id) if i.id != item_id]
+    repo.save_pantry(household_id, items)
+    return list_pantry(repo, household_id)
+
+
+def put_away(repo: Repo, household_id: str) -> int:
+    """Shopping done: everything in the basket goes into the pantry, at the amount bought."""
+    settings = repo.get_settings(household_id)
+    today = local_today(settings)
+    basket = [item for item in repo.list_groceries(household_id) if item.checked]
+    if not basket:
+        return 0
+    new = [
+        PantryItem(
+            name=item.name,
+            quantity=item.quantity,
+            unit=item.unit,
+            aisle=item.aisle,
+            use_by=pantry_logic.use_by(item.aisle, today),
+            source="shopping",
+        )
+        for item in basket
+    ]
+    pantry = pantry_logic.add(settle_pantry(repo, household_id, today), new)
+    repo.save_pantry(household_id, pantry)
+    repo.delete_groceries(household_id, [item.id for item in basket])
+    for week in {item.week_id for item in basket if item.week_id}:
+        plan = repo.get_plan(household_id, week)
+        if plan is not None and not plan.put_away:
+            plan.put_away = True
+            repo.save_plan(household_id, plan)
+    return len(basket)
+
+
+class SkipResult(BaseModel):
+    plan: WeekPlan  # this week, without the meal
+    moved_to: str | None = None  # e.g. "2026-11-23 mon_dinner"
+    # Next week is full: choose which of these meals to replace, then call again.
+    choose_from: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+def skip_meal(
+    repo: Repo,
+    household_id: str,
+    week_id: str,
+    slot: str,
+    replace_slot: str | None = None,
+    today: date | None = None,
+) -> SkipResult:
+    """ "I'm not cooking this": the food stays in the pantry, the recipe moves to next week.
+
+    It can be said the day after too: food already taken out for that meal goes back.
+    Next week, the recipe takes the first empty meal; when every meal is planned, the
+    caller is asked which one to replace.
+    """
+    plan = repo.get_plan(household_id, week_id)
+    if plan is None or slot not in plan.meals:
+        raise NotFound("There is no meal there to skip")
+    settings = repo.get_settings(household_id)
+    today = today or local_today(settings)
+    meal = plan.meals[slot]
+    target_week = next_week_id(date.fromisoformat(week_id))
+    target = repo.get_plan(household_id, target_week)
+    cook_slots = settings.cook_slots() or ["mon_dinner"]
+
+    if target is None:
+        target = WeekPlan(week_id=target_week, pending=True, diets=settings.diets)
+        place = cook_slots[0]
+    else:
+        free = [s for s in cook_slots if s not in target.meals]
+        if free:
+            place = free[0]
+        elif replace_slot in target.meals:
+            place = replace_slot
+        else:
+            return SkipResult(plan=plan, choose_from=list(target.meals))
+
+    # The food: back into the pantry if it was taken out, or in for the first time if the
+    # shopping was never put away. Not bought yet (no list made): nothing to keep.
+    label = f"bought for {_meal_label(week_id, slot, meal.recipe)}"
+    used = scale_ingredients(meal.recipe, meal.portions)
+    pantry = settle_pantry(repo, household_id, today)
+    if plan.status == "approved" and (meal.consumed or not plan.put_away):
+        staples = set(settings.staples)
+        # Bought around when the list was made, not today: fresh food is older than that.
+        bought = plan.approved_at.date() if plan.approved_at else today
+        food = [
+            PantryItem(
+                name=i.name,
+                quantity=i.quantity,
+                unit=i.unit,
+                aisle=i.aisle,
+                use_by=pantry_logic.use_by(i.aisle, bought),
+                source="skipped",
+                note=label,
+            )
+            for i in used
+            if i.name not in staples
+        ]
+        pantry = pantry_logic.add(pantry, food)
+    else:
+        for item in pantry:
+            if not item.note and any(pantry_logic.same_food(item.name, i.name) for i in used):
+                item.note = label
+    repo.save_pantry(household_id, pantry)
+
+    # Fresh food that will not keep until the new day.
+    cook_on = _meal_date(target_week, place)
+    warnings = []
+    for item in pantry:
+        if (
+            item.use_by
+            and item.use_by < cook_on
+            and any(pantry_logic.same_food(item.name, i.name) for i in used)
+        ):
+            warnings.append(
+                f"The {item.name} won't keep until {cook_on.strftime('%A')}. "
+                "Freeze it, or cook this sooner."
+            )
+
+    target.meals[place] = PlanMeal(
+        recipe=meal.recipe, portions=meal.portions, carried_from=f"{week_id} {slot}"
+    )
+    if target.status == "approved":
+        target.status = "draft"  # the grocery list needs updating
+    repo.save_plan(household_id, target)
+    del plan.meals[slot]
+    repo.save_plan(household_id, plan)
+    return SkipResult(plan=plan, moved_to=f"{target_week} {place}", warnings=warnings)

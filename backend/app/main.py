@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.ai.base import RecipeAI
-from app.api import household, integrations, plans, recipes
+from app.api import household, integrations, pantry, plans, recipes
 from app.config import Config
 from app.notify import FcmNotifier, LogNotifier, Notifier
 from app.repo.base import Repo
@@ -106,7 +106,13 @@ def create_app(
             notifier = LogNotifier()
     app.state.notifier = notifier
 
-    for router in (recipes.router, plans.router, household.router, integrations.router):
+    for router in (
+        recipes.router,
+        plans.router,
+        household.router,
+        integrations.router,
+        pantry.router,
+    ):
         app.include_router(router, prefix="/api")
 
     @app.exception_handler(Exception)

@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from app.models import GroceryItem, Household, Recipe, Settings, WeekPlan
+from app.models import GroceryItem, Household, PantryItem, Recipe, Settings, WeekPlan
 
 
 class Repo(Protocol):
@@ -20,6 +20,8 @@ class Repo(Protocol):
     # Settings
     def get_settings(self, household_id: str) -> Settings: ...
     def save_settings(self, household_id: str, settings: Settings) -> None: ...
+    def get_pantry(self, household_id: str) -> list[PantryItem]: ...
+    def save_pantry(self, household_id: str, items: list[PantryItem]) -> None: ...
 
     # Recipes
     def list_recipes(self, household_id: str) -> list[Recipe]: ...

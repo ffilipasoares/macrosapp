@@ -14,6 +14,9 @@ export type PlanMeal = Schemas["PlanMeal"];
 export type Alternative = Schemas["Alternative"];
 export type GroceryItem = Schemas["GroceryItem"];
 export type Me = Schemas["Me"];
+export type PantryItem = Schemas["PantryItem"];
+export type PantryDraft = Schemas["PantryDraft"];
+export type SkipResult = Schemas["SkipResult"];
 export type Aisle = Ingredient["aisle"];
 
 export const AISLES: { key: NonNullable<Aisle>; label: string }[] = [

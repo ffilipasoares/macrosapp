@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from app.models import Ingredient, IngredientNutrition, RecipeDraft
+from app.models import Ingredient, IngredientNutrition, PantryDraft, RecipeDraft
 
 
 class AIError(Exception):
@@ -38,4 +38,12 @@ class RecipeAI(Protocol):
 
     def find_recipe_links(self, query: str, count: int, avoid_titles: list[str]) -> list[str]:
         """Addresses of recipe pages found by a web search. They are checked before use."""
+        ...
+
+    def pantry_from_images(self, images: list[tuple[bytes, str]]) -> list[PantryDraft]:
+        """The food visible in photos of a fridge, freezer or cupboard."""
+        ...
+
+    def pantry_from_audio(self, data: bytes, mime_type: str) -> list[PantryDraft]:
+        """The food someone says they have at home."""
         ...

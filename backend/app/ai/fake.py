@@ -3,7 +3,7 @@
 import re
 
 from app.ai.base import AIError
-from app.models import Ingredient, IngredientNutrition, RecipeDraft
+from app.models import Ingredient, IngredientNutrition, PantryDraft, RecipeDraft
 
 _SAMPLE = RecipeDraft(
     title="Lemon herb chicken traybake",
@@ -100,6 +100,18 @@ class FakeRecipeAI:
             )
             for index in range(count * 2)
         ]
+
+    def pantry_from_images(self, images: list[tuple[bytes, str]]) -> list[PantryDraft]:
+        self.calls.append(("pantry images", len(images)))
+        return [
+            PantryDraft(name="egg", quantity=6),
+            PantryDraft(name="spinach", quantity=150, unit="g"),
+            PantryDraft(name="greek yogurt", quantity=500, unit="g"),
+        ]
+
+    def pantry_from_audio(self, data: bytes, mime_type: str) -> list[PantryDraft]:
+        self.calls.append(("pantry audio", mime_type))
+        return [PantryDraft(name="courgette", quantity=0.5), PantryDraft(name="rice")]
 
 
 class SampleRecipeAI(FakeRecipeAI):

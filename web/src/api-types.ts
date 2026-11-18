@@ -496,6 +496,12 @@ export interface components {
              * Format: date-time
              */
             created_at?: string;
+            /** Needed: what the recipes need, when whole packs are bought */
+            needed?: number | null;
+            /** Pack, e.g. "1 bag (300 g)" */
+            pack?: string;
+            /** Note, e.g. "you have some at home" */
+            note?: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -598,6 +604,40 @@ export interface components {
              * @default false
              */
             is_new: boolean;
+            /** Consumed: taken out of the pantry once its day passed */
+            consumed?: boolean;
+            /** Carried From, e.g. "2026-11-16 fri_dinner" */
+            carried_from?: string | null;
+            /** Uses Pantry: pantry food this meal uses */
+            uses_pantry?: string[];
+        };
+        /** PantryDraft */
+        PantryDraft: {
+            name: string;
+            quantity?: number | null;
+            unit?: string;
+            aisle?: components["schemas"]["Ingredient"]["aisle"];
+        };
+        /** PantryItem */
+        PantryItem: {
+            id?: string;
+            name: string;
+            quantity?: number | null;
+            unit?: string;
+            aisle?: components["schemas"]["Ingredient"]["aisle"];
+            /** Use By (YYYY-MM-DD), for fresh food */
+            use_by?: string | null;
+            source?: "manual" | "shopping" | "skipped";
+            note?: string;
+            added_at?: string;
+        };
+        /** SkipResult */
+        SkipResult: {
+            /** This week without the meal (no rule status or balance) */
+            plan: components["schemas"]["PlanOut"];
+            moved_to?: string | null;
+            choose_from?: string[];
+            warnings?: string[];
         };
         /** PlanOut */
         PlanOut: {

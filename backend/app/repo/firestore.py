@@ -15,7 +15,7 @@ import secrets
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from app.models import GroceryItem, Household, Recipe, Settings, WeekPlan
+from app.models import GroceryItem, Household, PantryItem, Recipe, Settings, WeekPlan
 
 _BATCH_LIMIT = 400
 
@@ -86,6 +86,22 @@ class FirestoreRepo:
 
     def save_settings(self, household_id: str, settings: Settings) -> None:
         self._settings_ref(household_id).set(settings.model_dump(mode="json"))
+
+    # Pantry: one document per household, small enough to read and write whole.
+
+    def _pantry_ref(self, household_id: str) -> firestore.DocumentReference:
+        return self._household(household_id).collection("config").document("pantry")
+
+    def get_pantry(self, household_id: str) -> list[PantryItem]:
+        snapshot = self._pantry_ref(household_id).get()
+        if not snapshot.exists:
+            return []
+        return [PantryItem(**item) for item in snapshot.to_dict().get("items", [])]
+
+    def save_pantry(self, household_id: str, items: list[PantryItem]) -> None:
+        self._pantry_ref(household_id).set(
+            {"items": [item.model_dump(mode="json") for item in items]}
+        )
 
     # Recipes --------------------------------------------------------------
 

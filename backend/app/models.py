@@ -1,6 +1,6 @@
 """Data shapes shared by the API, the core logic and storage."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Literal
 from uuid import uuid4
 
@@ -261,6 +261,12 @@ class PlanMeal(BaseModel):
     recipe: Recipe
     portions: int = Field(ge=1, le=30)
     is_new: bool = False
+    # Taken out of the pantry once its day has passed (assumed cooked).
+    consumed: bool = False
+    # Moved here by "I'm not cooking this", e.g. "2026-11-16 fri_dinner".
+    carried_from: str | None = None
+    # Pantry food this meal uses (filled in when the plan is shown).
+    uses_pantry: list[str] = Field(default_factory=list)
 
 
 class WeekPlan(BaseModel):
@@ -272,6 +278,10 @@ class WeekPlan(BaseModel):
     approved_at: datetime | None = None
     # The diets the plan was made for; None for plans made before diets existed.
     diets: list[str] | None = None
+    # Only meals carried over from a skipped day so far: the real plan is still to come.
+    pending: bool = False
+    # The bought groceries for this week were put away in the pantry.
+    put_away: bool = False
 
 
 class RuleStatus(BaseModel):
@@ -327,6 +337,45 @@ class GroceryItem(BaseModel):
     week_id: str | None = None
     recipes: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=now)
+    # What the recipes need, when the amount to buy is rounded up to whole packs.
+    needed: float | None = None
+    pack: str = ""  # e.g. "1 bag (300 g)"
+    note: str = ""  # e.g. "you have some at home"
+
+
+class PantryDraft(BaseModel):
+    """Food read from a photo, a recording or text, before it is saved."""
+
+    name: str = Field(min_length=1, max_length=120)
+    quantity: float | None = Field(default=None, ge=0)
+    unit: str = Field(default="", max_length=20)
+    aisle: Aisle = "other"
+
+    @field_validator("name")
+    @classmethod
+    def _tidy_name(cls, value: str) -> str:
+        return normalize_name(value) or value.strip().lower()
+
+    @field_validator("unit")
+    @classmethod
+    def _tidy_unit(cls, value: str) -> str:
+        return normalize_unit(value)
+
+    @model_validator(mode="after")
+    def _guess_aisle(self) -> "PantryDraft":
+        if self.aisle == "other":
+            self.aisle = guess_aisle(self.name)  # type: ignore[assignment]
+        return self
+
+
+class PantryItem(PantryDraft):
+    """Food at home now: added by hand, put away after shopping, or kept from a skipped meal."""
+
+    id: str = Field(default_factory=new_id)
+    use_by: date | None = None  # rough, for fresh food only
+    source: Literal["manual", "shopping", "skipped"] = "manual"
+    note: str = ""  # e.g. "bought for Friday's cod with tomato"
+    added_at: datetime = Field(default_factory=now)
 
 
 class Household(BaseModel):

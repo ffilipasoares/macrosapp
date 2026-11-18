@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
+import { PantryView } from "../components/PantryView";
 import { ErrorNote, Loading, messageOf } from "../components/ui";
 import { db } from "../firebase";
 import { AISLE_STYLE, ease } from "../lib/style";
@@ -26,6 +27,9 @@ export function GroceriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [adding, setAdding] = useState(false);
+  const [view, setView] = useState<"buy" | "home">("buy");
+  const [putting, setPutting] = useState(false);
+  const [putAwayNote, setPutAwayNote] = useState<string | null>(null);
 
   const groceries = useMemo(() => collection(db, "households", householdId, "groceries"), [householdId]);
 
@@ -120,6 +124,21 @@ export function GroceriesPage() {
   const basket = all.filter((item) => item.checked).sort((a, b) => a.name.localeCompare(b.name));
   const pct = all.length ? Math.round((basket.length / all.length) * 100) : 0;
 
+  /** Shopping done: the basket goes into the pantry, at the amounts bought. */
+  async function putAway() {
+    setPutting(true);
+    setError(null);
+    try {
+      const { moved } = await api.putAway();
+      setPutAwayNote(`${moved} item${moved === 1 ? "" : "s"} put away in your pantry.`);
+      if (!live) await loadThroughBackend();
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      setPutting(false);
+    }
+  }
+
   function clearBasket() {
     if (!live) {
       void viaBackend(() => api.clearCheckedGroceries());
@@ -136,15 +155,39 @@ export function GroceriesPage() {
         <header>
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-3xl font-bold tracking-tight">Groceries</h1>
-            {all.length ? <p className="text-sm font-medium text-ink-soft">{waiting.length} to buy</p> : null}
+            {view === "buy" && all.length ? <p className="text-sm font-medium text-ink-soft">{waiting.length} to buy</p> : null}
           </div>
-          {all.length ? (
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-full bg-card p-1 ring-1 ring-line" role="tablist" aria-label="Groceries">
+            {(
+              [
+                ["buy", "To buy"],
+                ["home", "At home"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={view === key}
+                onClick={() => setView(key)}
+                className={`rounded-full py-1.5 text-sm font-semibold transition-colors duration-150 ease-out ${
+                  view === key ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {view === "buy" && all.length ? (
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Shopping progress">
               <motion.div className="h-full rounded-full bg-green" initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.25, ease }} />
             </div>
           ) : null}
         </header>
 
+        {view === "home" ? (
+          <PantryView />
+        ) : (
+        <>
         <form onSubmit={add} className="flex items-center gap-2 rounded-full bg-card py-1.5 pl-5 pr-1.5 ring-1 ring-line focus-within:ring-ink-soft">
           <input
             id="grocery-add"
@@ -210,17 +253,33 @@ export function GroceriesPage() {
           })
         )}
 
+        {putAwayNote ? (
+          <button onClick={() => setView("home")} className="rounded-2xl bg-green-soft px-4 py-3 text-left text-sm font-semibold">
+            {putAwayNote} See what's at home →
+          </button>
+        ) : null}
+
         {basket.length ? (
           <section className="border-t border-line pt-5">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-bold text-ink-soft">In the basket</h2>
-              <button
-                onClick={clearBasket}
-                className="whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold text-orange transition-colors duration-150 ease-out hover:bg-orange-soft"
-              >
-                Clear {basket.length}
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={clearBasket}
+                  className="whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold text-ink-soft transition-colors duration-150 ease-out hover:bg-card"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => void putAway()}
+                  disabled={putting}
+                  className="whitespace-nowrap rounded-full bg-orange px-3 py-1 text-sm font-semibold text-card transition-opacity duration-150 ease-out disabled:opacity-40"
+                >
+                  {putting ? "Putting away…" : `Put away ${basket.length}`}
+                </button>
+              </div>
             </div>
+            <p className="mt-1 text-xs text-ink-soft">Put away moves them into your pantry, so plans use them first.</p>
             <ul className="mt-1">
               <AnimatePresence initial={false}>
                 {basket.map((item) => (
@@ -230,15 +289,25 @@ export function GroceriesPage() {
             </ul>
           </section>
         ) : null}
+        </>
+        )}
       </div>
     </main>
   );
 }
 
 function Row({ item, onToggle, onRemove }: { item: GroceryItem; onToggle: (item: GroceryItem) => void; onRemove: (item: GroceryItem) => void }) {
-  const quantity = formatQuantity(item.quantity, item.unit);
+  // Bought in packs: "1 bag (300 g)", and what the recipes actually need.
+  const quantity = item.pack || formatQuantity(item.quantity, item.unit);
   const recipes = item.recipes ?? [];
-  const note = item.source === "siri" ? "Added with Siri" : recipes.length ? `For ${recipes.join(", ")}` : "";
+  const needs = item.pack && item.needed ? `recipes need ${formatQuantity(item.needed, item.unit)}` : "";
+  const note = [
+    item.source === "siri" ? "Added with Siri" : recipes.length ? `For ${recipes.join(", ")}` : "",
+    needs,
+    item.note ?? "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <motion.li
       layout

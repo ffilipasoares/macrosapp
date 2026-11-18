@@ -3,7 +3,7 @@
 import secrets
 from collections import defaultdict
 
-from app.models import GroceryItem, Household, Recipe, Settings, WeekPlan
+from app.models import GroceryItem, Household, PantryItem, Recipe, Settings, WeekPlan
 
 
 class MemoryRepo:
@@ -11,6 +11,7 @@ class MemoryRepo:
         self.households: dict[str, Household] = {}
         self.user_household: dict[str, str] = {}
         self.settings: dict[str, Settings] = {}
+        self.pantry: dict[str, list[PantryItem]] = {}
         self.recipes: dict[str, dict[str, Recipe]] = defaultdict(dict)
         self.plans: dict[str, dict[str, WeekPlan]] = defaultdict(dict)
         self.groceries: dict[str, dict[str, GroceryItem]] = defaultdict(dict)
@@ -57,6 +58,12 @@ class MemoryRepo:
 
     def save_settings(self, household_id: str, settings: Settings) -> None:
         self.settings[household_id] = settings.model_copy(deep=True)
+
+    def get_pantry(self, household_id: str) -> list[PantryItem]:
+        return [item.model_copy(deep=True) for item in self.pantry.get(household_id, [])]
+
+    def save_pantry(self, household_id: str, items: list[PantryItem]) -> None:
+        self.pantry[household_id] = [item.model_copy(deep=True) for item in items]
 
     def list_recipes(self, household_id: str) -> list[Recipe]:
         return [r.model_copy(deep=True) for r in self.recipes[household_id].values()]
