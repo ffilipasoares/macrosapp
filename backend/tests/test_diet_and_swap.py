@@ -453,3 +453,28 @@ def test_own_diet_words_get_a_meaning_once_and_searches_use_it():
     assert "dishes that suit a low fodmap diet" in query and "vietnamese home cooking" in query
     # Dropping a word drops its meaning.
     assert set(set_settings(client, diets=["vietnamese"])["diet_meanings"]) == {"vietnamese"}
+
+
+def test_old_diet_verdicts_are_judged_again_once_but_allergy_checks_stay():
+    from app import services
+    from app.models import Ingredient, Recipe
+    from app.repo.memory import MemoryRepo
+
+    repo = MemoryRepo()
+    household = repo.household_for_user("ana", "a@example.com")
+    old = Recipe(
+        title="Fried fish",
+        ingredients=[Ingredient(name="fish", quantity=1)],
+        diet_fit={"mediterranean": True, "free of milk": True},
+    )
+    repo.save_recipe(household.id, old)
+    ai = Web({})
+    services.check_diets(repo, ai, household.id, [old], ["mediterranean", "free of milk"])
+    again = repo.get_recipe(household.id, old.id)
+    assert again.diet_fit_version == services.DIET_FIT_VERSION
+    assert again.diet_fit["free of milk"] is True  # kept, not asked again
+    assert "mediterranean" in again.diet_fit  # judged again, on its meaning
+    asked = [call for call in ai.calls if call[0] == "diets"]
+    assert len(asked) == 1
+    services.check_diets(repo, ai, household.id, [again], ["mediterranean", "free of milk"])
+    assert len([call for call in ai.calls if call[0] == "diets"]) == 1  # only once

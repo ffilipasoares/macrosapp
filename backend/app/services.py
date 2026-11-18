@@ -65,6 +65,7 @@ class NotFound(Exception):
 WEB_SEARCH_SECONDS = 50
 # How many recipes are judged against the diets in one AI call.
 DIET_CHECK_BATCH = 40
+DIET_FIT_VERSION = 2  # diet verdicts judged on meanings, not bare words
 
 
 @dataclass
@@ -328,6 +329,12 @@ def check_diets(
     not the bare word. Verdicts are stored on the recipe under the word, so each recipe is
     only judged once per diet. Recipes that could not be judged are treated as fitting.
     """
+    for recipe in recipes:
+        if recipe.diet_fit_version < DIET_FIT_VERSION:
+            # Judged on the bare word before: keep allergy checks, judge diets again.
+            recipe.diet_fit = {k: v for k, v in recipe.diet_fit.items() if k.startswith("free of ")}
+            recipe.diet_fit_version = DIET_FIT_VERSION
+            repo.save_recipe(household_id, recipe)
     pending = [recipe for recipe in recipes if needs_verdict(diets, recipe, learned)]
     if not pending or ai is None:
         return None
@@ -344,7 +351,9 @@ def check_diets(
             for recipe, verdict in zip(batch, verdicts, strict=False):
                 if verdict:
                     by_word = {described.get(k, k): v for k, v in verdict.items()}
-                    recipe.diet_fit = {**recipe.diet_fit, **by_word}
+                    # Only what this recipe had not been judged on yet.
+                    new = {k: v for k, v in by_word.items() if k not in recipe.diet_fit}
+                    recipe.diet_fit = {**recipe.diet_fit, **new}
                     repo.save_recipe(household_id, recipe)
     except AIError as error:
         log.warning("Could not check recipes against diets: %s", error)

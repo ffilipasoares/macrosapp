@@ -166,6 +166,9 @@ class Recipe(RecipeDraft):
     needs_review: bool = False
     # Whether the recipe fits each diet it was checked against, e.g. {"mediterranean": true}.
     diet_fit: dict[str, bool] = Field(default_factory=dict)
+    # How the diet verdicts were made: 2 = judged on what each diet means. Older ones
+    # were judged on the bare word and are judged again.
+    diet_fit_version: int = 0
     # The household's own say: ♥ for more of it, "Not for us" for never suggesting it.
     liked: bool = False
     not_for_us: bool = False
