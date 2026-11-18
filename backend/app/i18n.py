@@ -75,6 +75,12 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "reason_liked": {"en": "You ♥ this", "pt": "Marcaste com ♥"},
     "reason_often": {"en": "You often choose {what}", "pt": "Escolhes muitas vezes {what}"},
     "reason_new": {"en": "Something new", "pt": "Algo novo"},
+    "protein_repeat": {
+        "en": "A meal was left empty so the same fish, or the same meat cooked the same way, "
+        "is not repeated this week. Choose one yourself.",
+        "pt": "Ficou uma refeição vazia para não repetir o mesmo peixe, ou a mesma carne "
+        "cozinhada da mesma forma, nesta semana. Escolhe-a tu.",
+    },
     "approve_again": {
         "en": "Approve the plan again to update your grocery list.",
         "pt": "Aprova o plano de novo para atualizar a lista de compras.",

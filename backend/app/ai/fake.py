@@ -58,8 +58,16 @@ class FakeRecipeAI:
             (p for p in ("fish", "chicken", "beef", "pork", "vegetarian") if p in text.lower()),
             _SAMPLE.protein,
         )
+        # Tags only from the text itself, so different pages are different dishes.
+        tags = [tag for tag in _SAMPLE.tags if tag in text.lower()]
         return _SAMPLE.model_copy(
-            deep=True, update={"title": first_line, "source_url": source_url, "protein": protein}
+            deep=True,
+            update={
+                "title": first_line,
+                "source_url": source_url,
+                "protein": protein,
+                "tags": tags,
+            },
         )
 
     def estimate_nutrition(self, ingredients: list[Ingredient]) -> list[IngredientNutrition | None]:

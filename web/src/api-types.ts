@@ -858,6 +858,8 @@ export interface components {
             count: number;
             /** Target */
             target: number;
+            /** Group: for "how often a week" targets, e.g. "fish" */
+            group?: string | null;
         };
         /** SearchRequest */
         SearchRequest: {
@@ -903,6 +905,8 @@ export interface components {
             avoid?: string[];
             /** Equipment */
             equipment?: ("oven" | "air fryer" | "microwave" | "slow cooker" | "pressure cooker" | "blender" | "grill")[] | null;
+            /** Meals Per Week: "how often a week", e.g. {"fish": 3} */
+            meals_per_week?: { [key in "fish" | "chicken" | "red_meat" | "vegetarian"]?: number };
             /** Diet Meanings: the household's own diet words, interpreted once */
             diet_meanings?: {
                 [key: string]: {

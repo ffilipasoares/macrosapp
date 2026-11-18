@@ -179,6 +179,9 @@ class SlotSetting(BaseModel):
     portions: int = Field(default=2, ge=1, le=30)
 
 
+ProteinGroup = Literal["fish", "chicken", "red_meat", "vegetarian"]
+
+
 class DietMeaning(BaseModel):
     """A diet word the app did not know, interpreted once by AI."""
 
@@ -242,6 +245,9 @@ class Settings(BaseModel):
     avoid: list[str] = Field(default_factory=list, max_length=30)
     # The big kitchen equipment there is. None: not asked, so nothing is ruled out.
     equipment: list[Equipment] | None = None
+    # How many meals a week of each kind, e.g. {"fish": 3}. A kind left out: no preference.
+    # Replaces the balanced-week default for that kind.
+    meals_per_week: dict[ProteinGroup, int] = Field(default_factory=dict)
     # Longest a recipe may take, in minutes, on weekdays and at weekends. None: no limit.
     cook_minutes_weekday: int | None = Field(default=None, ge=5, le=480)
     cook_minutes_weekend: int | None = Field(default=None, ge=5, le=480)
@@ -258,6 +264,13 @@ class Settings(BaseModel):
         if isinstance(data, dict) and "diet" in data and not data.get("diets"):
             data = {**data, "diets": [data["diet"]] if data["diet"] else []}
         return data
+
+    @field_validator("meals_per_week")
+    @classmethod
+    def _sensible_counts(cls, value: dict[str, int]) -> dict[str, int]:
+        if any(not 0 <= n <= 14 for n in value.values()):
+            raise ValueError("between 0 and 14 meals a week")
+        return value
 
     @field_validator("allergies", "avoid")
     @classmethod
@@ -329,6 +342,8 @@ class RuleStatus(BaseModel):
     ok: bool
     count: int
     target: int
+    # For "how often a week" targets: the protein group, e.g. "fish", so the app can draw it.
+    group: str | None = None
 
 
 class BalanceCheck(BaseModel):

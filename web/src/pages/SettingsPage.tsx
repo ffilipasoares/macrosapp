@@ -3,7 +3,7 @@ import { Bell, Check, LogOut, X } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
-import { AllergyFields, AvoidFields, Chip, CookTimeFields, DIETS, EquipmentFields, PlanDayFields } from "../components/ProfileFields";
+import { AllergyFields, AvoidFields, Chip, CookTimeFields, DIETS, EquipmentFields, MealsPerWeekFields, PlanDayFields } from "../components/ProfileFields";
 import { ErrorNote, Loading, Stepper, messageOf, quietButton } from "../components/ui";
 import { auth } from "../firebase";
 import { DAY_COLORS, proteinStyle, traitLabel } from "../lib/style";
@@ -141,6 +141,13 @@ export function SettingsPage() {
 
           <Section title={t("When the plan is ready")} note={t("Next week's plan is made at this time, in your time zone, and you get a notification.")}>
             <PlanDayFields settings={settings} change={change} />
+          </Section>
+
+          <Section
+            title={t("How often a week")}
+            note={t("How many times a week you would like each. Your choice replaces the balanced-week default for it; the same fish is never planned twice in a week, and chicken or meat only repeats when cooked differently.")}
+          >
+            <MealsPerWeekFields settings={settings} change={change} />
           </Section>
 
           <Section title={t("Time to cook")} note={t("The longest a recipe may take. Plans only use recipes that fit the day; you can still choose any recipe yourself.")}>

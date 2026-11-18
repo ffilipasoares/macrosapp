@@ -250,3 +250,41 @@ export function CookTimeFields({ settings, change }: { settings: Settings; chang
     </div>
   );
 }
+
+const GROUPS: { key: "fish" | "chicken" | "red_meat" | "vegetarian"; label: () => string }[] = [
+  { key: "fish", label: () => t("Fish") },
+  { key: "chicken", label: () => t("Chicken") },
+  { key: "red_meat", label: () => t("Red meat") },
+  { key: "vegetarian", label: () => t("Vegetarian") },
+];
+
+/** "How often a week" for each kind of meal; "No preference" leaves the balanced week to decide. */
+export function MealsPerWeekFields({ settings, change }: { settings: Settings; change: Change }) {
+  const current = settings.meals_per_week ?? {};
+  const set = (key: (typeof GROUPS)[number]["key"], value: string) => {
+    const next = { ...current };
+    if (value === "") delete next[key];
+    else next[key] = Number(value);
+    change({ meals_per_week: next });
+  };
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {GROUPS.map((group) => (
+        <div key={group.key}>
+          <label htmlFor={`per-week-${group.key}`} className="field-label">{group.label()}</label>
+          <select
+            id={`per-week-${group.key}`}
+            className="field"
+            value={current[group.key] ?? ""}
+            onChange={(e) => set(group.key, e.target.value)}
+          >
+            <option value="">{t("No preference")}</option>
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <option key={n} value={n}>{n === 0 ? t("Never") : t("{n} a week", { n })}</option>
+            ))}
+          </select>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from app import standards
 from app.core.balance import food_group
+from app.core.proteins import clashes_with
 from app.models import Alternative, Recipe, Rule, RuleStatus
 
 
@@ -106,6 +107,7 @@ def pick_recipes(
     rng: random.Random,
     prefer: dict[str, float] | None = None,
     limits: list[int | None] | None = None,
+    kept: list[Recipe] | None = None,
 ) -> list[Recipe]:
     """Choose up to ``slot_count`` different recipes.
 
@@ -120,7 +122,10 @@ def pick_recipes(
     EXPLORE_EVERY ignores it, so something new or long forgotten still turns up.
     ``limits`` are the cooking-time limits of the meals (minutes, None for none):
     the chosen recipes must fit them, one recipe per meal.
+    No two meals of the week, ``kept`` ones included, may have the same fish, or the
+    same meat cooked the same way.
     """
+    kept = kept or []
     prefer = prefer or {}
     limits = limits if limits is not None else [None] * slot_count
     recent_ids = recent.two_weeks_ago
@@ -143,6 +148,8 @@ def pick_recipes(
 
     def can_add(recipe: Recipe) -> bool:
         if recipe.id in chosen_ids or not fits_times([*chosen, recipe], limits):
+            return False
+        if clashes_with(recipe, [*chosen, *kept]):
             return False
         repeats_used = sum(1 for r in chosen if r.id in recent_ids)
         if recipe.id in recent_ids and repeats_used >= repeat_budget:

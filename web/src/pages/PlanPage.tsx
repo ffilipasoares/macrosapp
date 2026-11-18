@@ -368,17 +368,35 @@ function slotName(slot: string): string {
 }
 
 /** Rules as dots: one per meal the rule asks for, filled as the plan meets it. */
+/** Colours for "how often a week" groups, borrowed from a protein of the group. */
+const GROUP_STYLE: Record<string, string> = { fish: "fish", chicken: "chicken", red_meat: "beef", vegetarian: "vegetarian" };
+
+function groupLabel(group: string): string {
+  return { fish: t("Fish"), chicken: t("Chicken"), red_meat: t("Red meat"), vegetarian: t("Vegetarian") }[group] ?? group;
+}
+
 function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
   const statuses = plan.rule_status ?? [];
-  // The API returns one status per rule of yours, in order. Variety is automatic and not shown.
-  const entries = statuses.map((status, i) => ({ status, rule: rules[i] as Rule | undefined }));
+  // First one status per "how often a week" choice (with its group), then one per rule of
+  // yours, in order. Variety is automatic and not shown.
+  const own = statuses.filter((status) => !status.group);
+  const entries = [
+    ...statuses
+      .filter((status) => status.group)
+      .map((status) => ({
+        status,
+        rule: { kind: "min", count: status.target, tag: GROUP_STYLE[status.group!] ?? status.group! } as Rule,
+        label: groupLabel(status.group!),
+      })),
+    ...own.map((status, i) => ({ status, rule: rules[i] as Rule | undefined, label: undefined as string | undefined })),
+  ];
   const short = entries.filter(({ status, rule }) => rule?.kind === "min" && !status.ok);
   const broken = entries.filter(({ status }) => !status.ok);
 
   if (entries.length === 0) return null;
   return (
     <section aria-label={t("Your rules")} className="flex flex-wrap items-center gap-x-5 gap-y-2">
-      {entries.map(({ status, rule }) => {
+      {entries.map(({ status, rule, label }) => {
         if (rule?.kind === "min" && rule.count > 0 && rule.count <= 8) {
           const style = proteinStyle(rule.tag);
           return (
@@ -389,7 +407,7 @@ function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
                 ))}
               </span>
               <span className={status.ok ? "font-medium" : "font-semibold text-orange"}>
-                {style.label} {Math.min(status.count, rule.count)}/{rule.count}
+                {label ?? style.label} {Math.min(status.count, rule.count)}/{rule.count}
               </span>
             </div>
           );

@@ -130,8 +130,9 @@ def _add(client, auth, title, protein, *ingredients):
 def _library(client, auth):
     for n in range(6):
         _add(client, auth, f"Steak {n}", "beef", "beef", "chips")
-    for n in range(2):
-        _add(client, auth, f"Salmon {n}", "fish", "salmon", "broccoli")
+    # Two different fish: the same fish twice in a week is never planned.
+    _add(client, auth, "Salmon 0", "fish", "salmon", "broccoli")
+    _add(client, auth, "Cod 1", "fish", "cod", "broccoli")
     _add(client, auth, "Lentil soup", "vegetarian", "lentils", "carrot")
     _add(client, auth, "Chicken salad", "chicken", "chicken", "lettuce")
 
@@ -158,4 +159,4 @@ def test_own_rules_are_extras_on_top_of_the_balanced_week():
     plan = client.post("/api/plans/2026-11-16/generate", headers=auth).json()
     titles = [m["recipe"]["title"] for m in plan["meals"].values()]
     assert "Chicken salad" in titles and "Lentil soup" in titles
-    assert sum(t.startswith("Salmon") for t in titles) == 2
+    assert sum(t.startswith(("Salmon", "Cod")) for t in titles) == 2

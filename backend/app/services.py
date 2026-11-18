@@ -29,6 +29,7 @@ from app.core.diet import (
 )
 from app.core.grocery import build_grocery_lines, load_packs, scale_ingredients
 from app.core.ingredients import guess_aisle, normalize_name
+from app.core.proteins import clash, clashes_with
 from app.core.weeks import DAYS, SLOT_KEYS, next_week_id, previous_week_ids
 from app.core.weeks import week_id as week_id_of
 from app.images import ImageStore, keep_own_copy
@@ -43,6 +44,7 @@ from app.models import (
     Recipe,
     RecipeDraft,
     Rule,
+    RuleStatus,
     Settings,
     TasteProfile,
     WeekBalance,
@@ -103,7 +105,11 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
     open_slots = [slot for slot in cook_slots if slot not in plan.meals]
     # The variety rule (the last status) is applied automatically, not shown as a chip:
     # a meal chosen by hand is never marked for it.
-    out = PlanOut(**plan.model_dump(), rule_status=statuses[:-1], open_slots=open_slots)
+    out = PlanOut(
+        **plan.model_dump(),
+        rule_status=[*_target_statuses(settings, plan), *statuses[:-1]],
+        open_slots=open_slots,
+    )
 
     # Meals are copies of recipes taken when planned. If macros were worked out since,
     # show them, as long as the ingredients are still the same.
@@ -142,7 +148,12 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
 def _in_language(out: PlanOut, settings: Settings) -> None:
     """Rule chips and balance checks in the household's language."""
     lang = settings.language
-    for status, rule in zip(out.rule_status, settings.rules, strict=False):
+    own = [status for status in out.rule_status if status.group is None]
+    for status in out.rule_status:
+        if status.group is not None:
+            what = i18n.word(lang, status.group.replace("_", " "))
+            status.label = f"{what} {status.count}/{status.target}"
+    for status, rule in zip(own, settings.rules, strict=False):
         key = "at_least" if rule.kind == "min" else "at_most"
         status.label = i18n.t(lang, key, count=rule.count, what=i18n.word(lang, rule.tag))
     if lang == "en" or out.balance is None:
@@ -182,6 +193,9 @@ def _fill_with_suggestions(
         return sum(1 for recipe in picks if planner.matches(recipe, rule))
 
     def allowed(recipe: Recipe) -> bool:
+        # The same fish twice, or the same meat cooked the same way, is never added.
+        if clashes_with(recipe, picks):
+            return False
         return all(
             not planner.matches(recipe, rule) or count(rule) < rule.count for rule in max_rules
         )
@@ -379,9 +393,38 @@ def suits(settings: Settings, recipe: Recipe) -> bool:
     )
 
 
+# "How often a week" groups: what each counts.
+PROTEIN_GROUPS: dict[str, dict] = {
+    "fish": {"tag": "fish", "also": ["seafood"]},
+    "chicken": {"tag": "chicken", "also": ["turkey"]},
+    "red_meat": {"tag": "red meat", "also": ["beef", "pork", "lamb"]},
+    "vegetarian": {"tag": "vegetarian", "also": ["vegan", "egg"]},
+}
+
+
+def target_rules(settings: Settings, slot_count: int) -> list[Rule]:
+    """The household's "how often a week": exactly that many, as far as the meals allow."""
+    rules = []
+    for group, count in settings.meals_per_week.items():
+        spec = PROTEIN_GROUPS[group]
+        n = min(count, slot_count)
+        label = group.replace("_", " ")
+        rules.append(Rule(kind="min", count=n, tag=spec["tag"], also=spec["also"], label=label))
+        rules.append(Rule(kind="max", count=n, tag=spec["tag"], also=spec["also"], label=label))
+    return rules
+
+
 def all_rules(settings: Settings, slot_count: int) -> list[Rule]:
-    """The balanced-week rules from the standards, then the household's own extras."""
-    return [*balance.planner_rules(standards.load(), slot_count), *settings.rules]
+    """The balanced-week rules from the standards, then the household's "how often a week"
+    (which replaces the balanced-week default for that kind), then its own extras."""
+    targets = target_rules(settings, slot_count)
+    chosen = {rule.tag for rule in targets}
+    balanced = [
+        rule
+        for rule in balance.planner_rules(standards.load(), slot_count)
+        if rule.tag not in chosen
+    ]
+    return [*balanced, *targets, *settings.rules]
 
 
 def _adjusted_rules(rules: list[Rule], kept: list[Recipe]) -> list[Rule]:
@@ -455,7 +498,9 @@ def generate_plan(
         for r in recipes
     }
     limits = [settings.cook_limit(slot) for slot in slots]
-    picks = planner.pick_recipes(recipes, len(slots), rules, recent, rng, prefer, limits)
+    picks = planner.pick_recipes(
+        recipes, len(slots), rules, recent, rng, prefer, limits, kept_recipes
+    )
     new_ids: set[str] = set()
     web = web or Web()
     deadline = time.monotonic() + web.search_seconds
@@ -498,6 +543,17 @@ def generate_plan(
         meals[slot] = PlanMeal(
             recipe=recipe, portions=settings.slots[slot].portions, is_new=recipe.id in new_ids
         )
+    # Last look before the plan is final: the same fish twice, or the same meat cooked
+    # the same way twice, never stays. Meals kept or moved here win; a new one goes.
+    seen: list[Recipe] = [meal.recipe for meal in kept.values()]
+    for slot in [s for s in SLOT_KEYS if s in meals and s not in kept]:
+        reason = next((r for other in seen if (r := clash(meals[slot].recipe, other))), None)
+        if reason:
+            log.info("Left %s empty in %s: %s", slot, week_id, reason)
+            notes.append(i18n.t(lang, "protein_repeat"))
+            del meals[slot]
+        else:
+            seen.append(meals[slot].recipe)
     plan = WeekPlan(
         week_id=week_id,
         meals={slot: meals[slot] for slot in SLOT_KEYS if slot in meals},
@@ -672,10 +728,13 @@ def swap_meal(
     A main dish that fits the diets and is not already planned this week, keeping the
     rules if possible, chosen among the best few. To choose freely, pick from the list.
     """
+    plan = repo.get_plan(household_id, week_id)
+    others = [m.recipe for s, m in (plan.meals.items() if plan else []) if s != slot]
     options = [
         option
         for option in meal_alternatives(repo, household_id, week_id, slot)
-        if option.recipe.category == "main"
+        if not clashes_with(option.recipe, others)
+        and option.recipe.category == "main"
         and not option.last_week
         and not option.not_for_us
         and option.fits_diets
@@ -1443,3 +1502,23 @@ def interpret_diets(ai: RecipeAI | None, settings: Settings) -> Settings:
         log.warning("Could not interpret diets %s: %s", unknown, error)
         return settings.model_copy(update={"diet_meanings": known_now})
     return settings.model_copy(update={"diet_meanings": {**known_now, **meanings}})
+
+
+def _target_statuses(settings: Settings, plan: WeekPlan) -> list[RuleStatus]:
+    """One chip per "how often a week" choice: e.g. fish 2 of 3."""
+    planned = [meal.recipe for meal in plan.meals.values()]
+    out = []
+    for group, target in settings.meals_per_week.items():
+        spec = PROTEIN_GROUPS[group]
+        rule = Rule(kind="min", count=target, tag=spec["tag"], also=spec["also"])
+        count = sum(1 for recipe in planned if planner.matches(recipe, rule))
+        out.append(
+            RuleStatus(
+                label=f"{group.replace('_', ' ')} {count}/{target}",
+                ok=count == target,
+                count=count,
+                target=target,
+                group=group,
+            )
+        )
+    return out
