@@ -38,47 +38,54 @@ def test_week_ids_are_mondays():
 # Planner -------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("seed", range(50))
-def test_plan_always_satisfies_rules_and_repeat_limit(seed):
-    recipes = library()
-    recent = {recipe.id for recipe in recipes[:10]}  # includes all 6 chicken recipes
-    picks = planner.pick_recipes(recipes, 9, RULES, recent, 0.2, random.Random(seed))
+NONE = planner.Recent()
 
-    assert len(picks) == 9
-    assert len({recipe.id for recipe in picks}) == 9
-    assert sum(1 for recipe in picks if recipe.protein == "fish") >= 2
-    assert sum(1 for recipe in picks if recipe.id in recent) <= 1
-    # Only one repeat is allowed and every chicken recipe is recent, so the
-    # chicken rule cannot be fully met; it must be reported, not silently broken.
-    statuses = planner.rule_status(picks, 9, RULES, recent, 0.2)
-    assert [status.ok for status in statuses] == [False, True, True]
+
+@pytest.mark.parametrize("seed", range(50))
+def test_plan_always_satisfies_rules_and_variety(seed):
+    recipes = library()
+    # Every chicken recipe was cooked last week; two fish recipes two weeks ago.
+    recent = planner.Recent(
+        last_week=frozenset(r.id for r in recipes if r.protein == "chicken"),
+        two_weeks_ago=frozenset(r.id for r in recipes[6:10]),
+    )
+    picks = planner.pick_recipes(recipes, 9, RULES, recent, random.Random(seed))
+
+    assert len({recipe.id for recipe in picks}) == len(picks)
+    assert not any(recipe.id in recent.last_week for recipe in picks)
+    assert sum(1 for recipe in picks if recipe.id in recent.two_weeks_ago) <= 4  # half of 9
+    # The chicken rule cannot be met without last week's recipes; it is reported, not broken.
+    statuses = planner.rule_status(picks, 9, RULES, recent)
+    assert statuses[0].ok is False and statuses[-1].ok is True
 
 
 @pytest.mark.parametrize("seed", range(50))
 def test_plan_meets_min_rules_when_library_allows(seed):
-    picks = planner.pick_recipes(library(), 9, RULES, set(), 0.2, random.Random(seed))
-    assert all(status.ok for status in planner.rule_status(picks, 9, RULES, set(), 0.2))
+    picks = planner.pick_recipes(library(), 9, RULES, NONE, random.Random(seed))
+    assert all(status.ok for status in planner.rule_status(picks, 9, RULES, NONE))
 
 
 def test_max_rule_is_never_exceeded():
     rules = [Rule(kind="max", count=1, tag="beef")]
     for seed in range(30):
-        picks = planner.pick_recipes(library(), 9, rules, set(), 0.2, random.Random(seed))
+        picks = planner.pick_recipes(library(), 9, rules, NONE, random.Random(seed))
         assert sum(1 for recipe in picks if recipe.protein == "beef") <= 1
 
 
 def test_rules_can_match_tags_as_well_as_protein():
     recipes = [make_recipe("a", tags=["quick"]), make_recipe("b"), make_recipe("c")]
     rules = [Rule(kind="min", count=1, tag="quick")]
-    picks = planner.pick_recipes(recipes, 1, rules, set(), 0.2, random.Random(1))
+    picks = planner.pick_recipes(recipes, 1, rules, NONE, random.Random(1))
     assert [recipe.id for recipe in picks] == ["a"]
 
 
 def test_small_library_returns_fewer_meals_instead_of_repeating():
     recipes = library()[:9]
-    recent = {recipe.id for recipe in recipes}
-    picks = planner.pick_recipes(recipes, 9, [], recent, 0.2, random.Random(0))
-    assert len(picks) == 1  # 20% of 9 slots
+    # Two weeks ago: at most half may come back. Last week: none.
+    before = planner.Recent(two_weeks_ago=frozenset(r.id for r in recipes))
+    assert len(planner.pick_recipes(recipes, 9, [], before, random.Random(0))) == 4
+    last = planner.Recent(last_week=frozenset(r.id for r in recipes))
+    assert planner.pick_recipes(recipes, 9, [], last, random.Random(0)) == []
 
 
 def test_prefers_recipes_cooked_longest_ago():
@@ -87,14 +94,14 @@ def test_prefers_recipes_cooked_longest_ago():
         make_recipe("long-ago", last_planned_week="2026-06-01"),
         make_recipe("never"),
     ]
-    picks = planner.pick_recipes(recipes, 2, [], set(), 0.2, random.Random(0))
+    picks = planner.pick_recipes(recipes, 2, [], NONE, random.Random(0))
     assert {recipe.id for recipe in picks} == {"never", "long-ago"}
 
 
-def test_repeat_allowance():
-    assert planner.max_repeats(9, 0.2) == 1
-    assert planner.max_repeats(10, 0.2) == 2
-    assert planner.max_repeats(4, 0.2) == 0
+def test_repeat_allowance_is_half_of_the_week():
+    assert planner.max_repeats(9) == 4
+    assert planner.max_repeats(10) == 5
+    assert planner.max_repeats(1) == 0
 
 
 def test_alternatives_put_rule_keeping_swaps_first():
@@ -106,7 +113,7 @@ def test_alternatives_put_rule_keeping_swaps_first():
         "wed_dinner": by_id["fish-6"],
         "thu_dinner": by_id["fish-7"],
     }
-    options = planner.alternatives(planned, "wed_dinner", recipes, 4, RULES, set(), 0.2)
+    options = planner.alternatives(planned, "wed_dinner", recipes, 4, RULES, NONE)
 
     # Everything is offered except the recipe already in this slot; meals planned on
     # other days are included and flagged.

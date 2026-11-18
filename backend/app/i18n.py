@@ -89,8 +89,8 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "at_least": {"en": "At least {count} {what}", "pt": "Pelo menos {count} {what}"},
     "at_most": {"en": "At most {count} {what}", "pt": "No máximo {count} {what}"},
     "repeats": {
-        "en": "At most {count} repeated from recent weeks",
-        "pt": "No máximo {count} repetidas das últimas semanas",
+        "en": "Nothing from last week, at most {count} from two weeks ago",
+        "pt": "Nada da semana passada, no máximo {count} de há duas semanas",
     },
     "check_vegetable_days": {"en": "Vegetables most days", "pt": "Legumes na maioria dos dias"},
     "check_fish": {"en": "Fish or seafood", "pt": "Peixe ou marisco"},

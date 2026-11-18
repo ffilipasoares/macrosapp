@@ -148,7 +148,7 @@ def test_the_planner_aims_for_a_balanced_week_without_any_own_rules():
         assert "Lentil soup" in [m["recipe"]["title"] for m in plan["meals"].values()]
         assert plan["balance"]["balanced"], plan["balance"]["checks"]
         # Only the household's own rules appear among the rule chips.
-        assert [s["label"] for s in plan["rule_status"]] == ["At most 1 repeated from recent weeks"]
+        assert plan["rule_status"] == []
 
 
 def test_own_rules_are_extras_on_top_of_the_balanced_week():

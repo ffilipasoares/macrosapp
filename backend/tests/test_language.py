@@ -111,7 +111,6 @@ def test_the_plan_list_and_warnings_speak_portuguese():
     client.post("/api/recipes", json=english_recipe("Cod", ("cod", 2, "")), headers=AUTH)
     plan = client.post(f"/api/plans/{WEEK}/generate", headers=AUTH).json()
     assert plan["rule_status"][0]["label"] == "Pelo menos 1 peixe"
-    assert plan["rule_status"][-1]["label"].startswith("No máximo")
     assert {c["label"] for c in plan["balance"]["checks"]} >= {"Peixe ou marisco", "Carne vermelha"}
     assert any("Só foi possível preencher" in note for note in plan["notes"])
     options = client.get(f"/api/plans/{WEEK}/meals/tue_dinner/alternatives", headers=AUTH).json()

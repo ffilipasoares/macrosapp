@@ -66,14 +66,16 @@ class Web:
     search_seconds: float = field(default_factory=lambda: WEB_SEARCH_SECONDS)
 
 
-def recent_recipe_ids(repo: Repo, household_id: str, week_id: str, settings: Settings) -> set[str]:
-    """Recipes planned in the weeks just before ``week_id``."""
-    ids: set[str] = set()
-    for previous in previous_week_ids(week_id, settings.repeat_window_weeks):
-        plan = repo.get_plan(household_id, previous)
-        if plan:
-            ids.update(meal.recipe.id for meal in plan.meals.values())
-    return ids
+def recent_weeks(repo: Repo, household_id: str, week_id: str) -> planner.Recent:
+    """Recipes planned in the two weeks before ``week_id``: last week's never come back,
+    and at most half of the week may come from the week before that."""
+
+    def ids(week: str) -> frozenset[str]:
+        plan = repo.get_plan(household_id, week)
+        return frozenset(meal.recipe.id for meal in plan.meals.values()) if plan else frozenset()
+
+    last, before = previous_week_ids(week_id, 2)
+    return planner.Recent(last_week=ids(last), two_weeks_ago=ids(before))
 
 
 def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
@@ -84,11 +86,12 @@ def plan_out(repo: Repo, household_id: str, plan: WeekPlan) -> PlanOut:
         [meal.recipe for meal in plan.meals.values()],
         slot_count,
         settings.rules,
-        recent_recipe_ids(repo, household_id, plan.week_id, settings),
-        settings.max_repeat_ratio,
+        recent_weeks(repo, household_id, plan.week_id),
     )
     open_slots = [slot for slot in cook_slots if slot not in plan.meals]
-    out = PlanOut(**plan.model_dump(), rule_status=statuses, open_slots=open_slots)
+    # The variety rule (the last status) is applied automatically, not shown as a chip:
+    # a meal chosen by hand is never marked for it.
+    out = PlanOut(**plan.model_dump(), rule_status=statuses[:-1], open_slots=open_slots)
 
     # Meals are copies of recipes taken when planned. If macros were worked out since,
     # show them, as long as the ingredients are still the same.
@@ -129,8 +132,6 @@ def _in_language(out: PlanOut, settings: Settings) -> None:
     for status, rule in zip(out.rule_status, settings.rules, strict=False):
         key = "at_least" if rule.kind == "min" else "at_most"
         status.label = i18n.t(lang, key, count=rule.count, what=i18n.word(lang, rule.tag))
-    if out.rule_status:
-        out.rule_status[-1].label = i18n.t(lang, "repeats", count=out.rule_status[-1].target)
     if lang == "en" or out.balance is None:
         return
     for check in out.balance.checks:
@@ -382,21 +383,19 @@ def generate_plan(
     if problem:
         notes.append(problem)
     recipes = [r for r in library if suits(settings, r) and r.id not in kept_ids]
-    recent = recent_recipe_ids(repo, household_id, week_id, settings)
+    recent = recent_weeks(repo, household_id, week_id)
     rules = _adjusted_rules(all_rules(settings, len(settings.cook_slots())), kept_recipes)
     open_settings = settings.model_copy(update={"rules": rules})
 
     today = local_today(settings)
     pantry = settle_pantry(repo, household_id, today)
     prefer = {r.id: pantry_logic.preference(pantry, r.ingredients, today) for r in recipes}
-    picks = planner.pick_recipes(
-        recipes, len(slots), rules, recent, settings.max_repeat_ratio, rng, prefer
-    )
+    picks = planner.pick_recipes(recipes, len(slots), rules, recent, rng, prefer)
     new_ids: set[str] = set()
     web = web or Web()
     deadline = time.monotonic() + web.search_seconds
 
-    statuses = planner.rule_status(picks, len(slots), rules, recent, settings.max_repeat_ratio)
+    statuses = planner.rule_status(picks, len(slots), rules, recent)
     if ai is not None and (len(picks) < len(slots) or not all(s.ok for s in statuses)):
         try:
             picks, new_ids = _fill_with_suggestions(
@@ -523,8 +522,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
         repo.list_recipes(household_id),  # the whole library: choosing a meal is always free
         slot_count,
         all_rules(settings, slot_count),
-        recent_recipe_ids(repo, household_id, week_id, settings),
-        settings.max_repeat_ratio,
+        recent_weeks(repo, household_id, week_id),
     )
     for option in options:
         option.fits_diets = fits(settings.diets, option.recipe)
@@ -538,6 +536,7 @@ def meal_alternatives(repo: Repo, household_id: str, week_id: str, slot: str) ->
             not option.fits_diets,
             bool(option.warnings),
             option.already_planned,
+            option.last_week,
             not option.keeps_rules,
         )
     )
@@ -587,6 +586,7 @@ def swap_meal(
         option
         for option in meal_alternatives(repo, household_id, week_id, slot)
         if option.recipe.category == "main"
+        and not option.last_week
         and option.fits_diets
         and not option.warnings
         and not option.already_planned

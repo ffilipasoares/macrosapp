@@ -11,7 +11,7 @@ import { DAYS, MEALS, defaultWeekId } from "../lib/weeks";
 import { enablePush, pushState, type PushState } from "../push";
 import { useMe } from "../session";
 import { PROTEINS, type Rule, type Settings } from "../types";
-import { setLanguage, t, tn } from "../lib/i18n";
+import { setLanguage, t } from "../lib/i18n";
 import { useSession } from "../session";
 
 
@@ -213,28 +213,9 @@ export function SettingsPage() {
                 {t("Add rule")}
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="repeat-weeks" className="field-label">{t("Avoid repeats from")}</label>
-                <select id="repeat-weeks" className="field" value={settings.repeat_window_weeks ?? 2} onChange={(e) => change({ repeat_window_weeks: Number(e.target.value) })}>
-                  {[0, 1, 2, 3, 4].map((weeks) => (
-                    <option key={weeks} value={weeks}>
-                      {weeks === 0 ? t("no weeks") : tn(weeks, "the last week", "the last {n} weeks")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="repeat-ratio" className="field-label">{t("Repeats allowed")}</label>
-                <select id="repeat-ratio" className="field" value={settings.max_repeat_ratio ?? 0.2} onChange={(e) => change({ max_repeat_ratio: Number(e.target.value) })}>
-                  {[0, 0.1, 0.2, 0.3, 0.5].map((ratio) => (
-                    <option key={ratio} value={ratio}>
-                      {t("{pct}% of meals", { pct: ratio * 100 })}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <p className="text-sm text-ink-soft">
+              {t("Variety is automatic: nothing from last week comes back, and at least half of each week is new compared with two weeks before.")}
+            </p>
           </Section>
 
           <Section

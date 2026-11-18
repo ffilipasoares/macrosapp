@@ -16,7 +16,7 @@ Google Cloud.
 | Use the app in Portuguese or English | One language per household, chosen in the first-use setup (it starts from the phone's language) and in Settings. Screens, recipes, the grocery list, plan notes and notifications follow it. Recipes are translated once by AI; ingredient names stay English underneath, so allergies, the pantry and packs keep matching |
 | Start without an empty app | A short first-use setup asks who eats, which meals you cook, when the plan should be ready, diets, allergies, foods you never eat, kitchen equipment and staples, then makes the first plan |
 | Stay safe with allergies | Recipes with any of the 14 EU allergens you choose, or your own, are never planned or swapped in; checked by ingredient names and once per recipe by AI. Choosing one by hand shows a warning |
-| Keep variety | Uses at most 20% of meals from the previous two weeks, preferring recipes cooked longest ago |
+| Keep variety | Automatically, for everyone: no recipe from last week comes back, and at least half of each week is new compared with two weeks before. Choosing a meal yourself is always free |
 | Eat a balanced week without setting anything up | Plans aim for a balanced week by default: vegetables most days, fish twice, beans or lentils once, red meat at most twice |
 | Add your own preferences | Optional extra rules on top, such as "at least 2 chicken meals a week", enforced by counting; a swap that would break one is flagged |
 | Cook once, eat twice | Lets you set portions per meal (Thursday dinner for 3 covers Friday lunch) and scales recipes to match |
@@ -75,8 +75,7 @@ and "At home", your pantry.
 - *Meals you cook*: for each lunch and dinner of the week, a switch and a
   portion count. Meals switched off stay blank.
 - *Your own extra rules*: optional "at least" or "at most" N meals with a given
-  protein or tag, on top of the balanced week, plus how many weeks to look back
-  for repeats and what share of repeats is allowed.
+  protein or tag, on top of the balanced week.
 - *Always in the house*: ingredients left off the generated list.
 - *When the plan is ready*: the day and hour next week's plan is made.
 - *Allergies*, *Foods you never eat*, *Kitchen equipment*: kept out of plans.

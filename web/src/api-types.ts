@@ -401,6 +401,8 @@ export interface components {
              * @default false
              */
             already_planned?: boolean;
+            /** Last Week: cooked last week, so never picked for you */
+            last_week?: boolean;
             /**
              * Fits Diets
              * @default true
@@ -865,16 +867,6 @@ export interface components {
             rules?: components["schemas"]["Rule"][];
             /** Staples */
             staples?: string[];
-            /**
-             * Repeat Window Weeks
-             * @default 2
-             */
-            repeat_window_weeks: number;
-            /**
-             * Max Repeat Ratio
-             * @default 0.2
-             */
-            max_repeat_ratio: number;
             /**
              * Timezone
              * @default Europe/Lisbon

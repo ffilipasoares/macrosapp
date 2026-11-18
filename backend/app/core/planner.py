@@ -6,6 +6,7 @@ shortfall is reported; nothing here depends on a language model.
 
 import random
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from app import standards
 from app.core.balance import food_group
@@ -29,9 +30,22 @@ def matches(recipe: Recipe, rule: Rule | str) -> bool:
     return False
 
 
-def max_repeats(slot_count: int, max_repeat_ratio: float) -> int:
-    """How many meals may come from recent weeks, e.g. 9 slots at 20% gives 1."""
-    return int(slot_count * max_repeat_ratio + 1e-9)
+# Variety, the same for everyone: nothing from last week comes back, and at least half
+# of the week is different from two weeks before.
+TWO_WEEKS_AGO_SHARE = 0.5
+
+
+@dataclass(frozen=True)
+class Recent:
+    """The recipes of the two weeks before the one being planned."""
+
+    last_week: frozenset[str] = frozenset()
+    two_weeks_ago: frozenset[str] = frozenset()
+
+
+def max_repeats(slot_count: int, share: float = TWO_WEEKS_AGO_SHARE) -> int:
+    """How many meals may come from two weeks ago, e.g. 5 meals at 50% gives 2."""
+    return int(slot_count * share + 1e-9)
 
 
 def _count(recipes: Iterable[Recipe], rule: Rule | str) -> int:
@@ -42,21 +56,23 @@ def pick_recipes(
     recipes: list[Recipe],
     slot_count: int,
     rules: list[Rule],
-    recent_ids: set[str],
-    max_repeat_ratio: float,
+    recent: Recent,
     rng: random.Random,
     prefer: dict[str, float] | None = None,
 ) -> list[Recipe]:
     """Choose up to ``slot_count`` different recipes.
 
-    Order of priority: never exceed a "max" rule or the repeat allowance, then
+    Recipes from last week are never chosen. Order of priority: never exceed a "max"
+    rule or the share allowed from two weeks ago, then
     satisfy "min" rules, then prefer recipes that use food already at home
     (``prefer``: a score per recipe id) and fresh food already bought for another
     meal this week, then recipes that were cooked longest ago.
     Returns fewer than ``slot_count`` recipes when the library is too small.
     """
     prefer = prefer or {}
-    repeat_budget = max_repeats(slot_count, max_repeat_ratio)
+    recent_ids = recent.two_weeks_ago
+    recipes = [recipe for recipe in recipes if recipe.id not in recent.last_week]
+    repeat_budget = max_repeats(slot_count)
     min_rules = [rule for rule in rules if rule.kind == "min"]
     max_rules = [rule for rule in rules if rule.kind == "max"]
 
@@ -126,8 +142,7 @@ def rule_status(
     planned: list[Recipe],
     slot_count: int,
     rules: list[Rule],
-    recent_ids: set[str],
-    max_repeat_ratio: float,
+    recent: Recent,
 ) -> list[RuleStatus]:
     """Where a plan stands against every rule, for display and for checking swaps."""
     statuses = []
@@ -140,13 +155,14 @@ def rule_status(
             label, ok = f"At most {rule.count} {name}", count <= rule.count
         statuses.append(RuleStatus(label=label, ok=ok, count=count, target=rule.count))
 
-    budget = max_repeats(slot_count, max_repeat_ratio)
-    repeats = sum(1 for recipe in planned if recipe.id in recent_ids)
+    budget = max_repeats(slot_count)
+    repeats = sum(1 for recipe in planned if recipe.id in recent.two_weeks_ago)
+    from_last_week = sum(1 for recipe in planned if recipe.id in recent.last_week)
     statuses.append(
         RuleStatus(
-            label=f"At most {budget} repeated from recent weeks",
-            ok=repeats <= budget,
-            count=repeats,
+            label=f"Nothing from last week, at most {budget} from two weeks ago",
+            ok=from_last_week == 0 and repeats <= budget,
+            count=repeats + from_last_week,
             target=budget,
         )
     )
@@ -159,8 +175,7 @@ def alternatives(
     recipes: list[Recipe],
     slot_count: int,
     rules: list[Rule],
-    recent_ids: set[str],
-    max_repeat_ratio: float,
+    recent: Recent,
 ) -> list[Alternative]:
     """Every recipe that could replace the meal in ``slot``, rule-keeping ones first.
 
@@ -172,7 +187,8 @@ def alternatives(
     other_ids = {recipe.id for recipe in others}
 
     def failures(planned: list[Recipe]) -> int:
-        statuses = rule_status(planned, slot_count, rules, recent_ids, max_repeat_ratio)
+        # Variety (the last status) only guides automatic choices; picking by hand is free.
+        statuses = rule_status(planned, slot_count, rules, recent)[:-1]
         return sum(1 for status in statuses if not status.ok)
 
     # A swap "keeps the rules" if it leaves no more rules broken than removing the meal would.
@@ -182,6 +198,7 @@ def alternatives(
             recipe=recipe,
             keeps_rules=failures([*others, recipe]) <= baseline,
             already_planned=recipe.id in other_ids,
+            last_week=recipe.id in recent.last_week,
         )
         for recipe in recipes
         if current is None or recipe.id != current.id
@@ -190,7 +207,8 @@ def alternatives(
         key=lambda option: (
             not option.keeps_rules,
             option.already_planned,
-            option.recipe.id in recent_ids,
+            option.last_week,
+            option.recipe.id in recent.two_weeks_ago,
             option.recipe.last_planned_week or "",
             option.recipe.title.lower(),
         )

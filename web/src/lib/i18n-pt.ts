@@ -406,6 +406,7 @@ export const PT: Record<string, string> = {
   "Use soon": "Usar em breve",
   "use today": "usar hoje",
   "Uses {foods} from home": "Usa {foods} de casa",
+  "Variety is automatic: nothing from last week comes back, and at least half of each week is new compared with two weeks before.": "A variedade é automática: nada da semana passada volta, e pelo menos metade de cada semana é nova em relação a há duas semanas.",
   "Vegan": "Vegano",
   "Vegetarian": "Vegetariana",
   "Vegetarian & vegan": "Vegetariano e vegano",

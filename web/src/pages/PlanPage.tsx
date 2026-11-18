@@ -333,7 +333,7 @@ function slotName(slot: string): string {
 /** Rules as dots: one per meal the rule asks for, filled as the plan meets it. */
 function RuleScore({ plan, rules }: { plan: Plan; rules: Rule[] }) {
   const statuses = plan.rule_status ?? [];
-  // The API returns one status per rule, in order, then the repeat limit last.
+  // The API returns one status per rule of yours, in order. Variety is automatic and not shown.
   const entries = statuses.map((status, i) => ({ status, rule: rules[i] as Rule | undefined }));
   const short = entries.filter(({ status, rule }) => rule?.kind === "min" && !status.ok);
   const broken = entries.filter(({ status }) => !status.ok);
@@ -816,6 +816,7 @@ function isSuggested(option: Alternative): boolean {
     option.fits_diets !== false &&
     !(option.warnings ?? []).length &&
     !option.already_planned &&
+    !option.last_week &&
     option.keeps_rules
   );
 }

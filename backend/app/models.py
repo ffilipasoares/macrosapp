@@ -208,8 +208,6 @@ class Settings(BaseModel):
     slots: dict[str, SlotSetting] = Field(default_factory=default_slots)
     rules: list[Rule] = Field(default_factory=list)
     staples: list[str] = Field(default_factory=list)
-    repeat_window_weeks: int = Field(default=2, ge=0, le=8)
-    max_repeat_ratio: float = Field(default=0.2, ge=0, le=1)
     timezone: str = "Europe/Lisbon"
     # Everyone in the household reads the app, recipes and lists in this language.
     language: Language = "en"
@@ -331,6 +329,7 @@ class Alternative(BaseModel):
     recipe: Recipe
     keeps_rules: bool
     already_planned: bool = False
+    last_week: bool = False  # cooked last week: still selectable, never picked for you
     fits_diets: bool = True
     # E.g. "contains milk", "needs an air fryer". Still selectable, shown as a warning.
     warnings: list[str] = Field(default_factory=list)
