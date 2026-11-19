@@ -306,6 +306,7 @@ export const PT: Record<string, string> = {
   "Planning your week… this can take a minute": "A planear a tua semana… pode demorar um minuto",
   "Pork": "Porco",
   "Portions": "Doses",
+  "Portuguese": "Portuguesa",
   "Pressure cooker": "Panela de pressão",
   "Previous week": "Semana anterior",
   "probably past its best": "provavelmente já passou do ponto",

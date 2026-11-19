@@ -14,6 +14,8 @@ export const DIETS = [
   { value: "pescatarian", get label() { return t("Pescatarian"); } },
   { value: "vegetarian", get label() { return t("Vegetarian"); } },
   { value: "vegan", get label() { return t("Vegan"); } },
+  // A cuisine, not a diet: new ideas then come from Portuguese recipe websites.
+  { value: "portuguese", get label() { return t("Portuguese"); } },
 ];
 
 /** The 14 allergens EU food labels must declare. The values match the backend's lists. */
